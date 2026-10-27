@@ -5,10 +5,10 @@ import * as THREE from 'three';
 import { LAYER } from './util.js';
 
 export class PlanarReflection {
-  constructor(scale = 0.5) {
+  constructor(scale = 0.5, type = THREE.HalfFloatType) {
     this.scale = scale;
     this.rt = new THREE.WebGLRenderTarget(16, 16, {
-      type: THREE.HalfFloatType,
+      type,
       generateMipmaps: true,
       minFilter: THREE.LinearMipmapLinearFilter,
       magFilter: THREE.LinearFilter,

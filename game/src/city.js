@@ -398,6 +398,9 @@ function buildBuildings(track, index, isWater, quality, area) {
     const hx = rng();
     let h = 9 + Math.pow(hx, 2.2) * (30 + u * 140);
     if (u > 0.7 && rng() < 0.08) h += 60 + rng() * 60;
+    // 百道 seaside: low-rise between the expressway and the sea so the tower/dome read.
+    const seaside = q.s > 700 && q.s < 2600 && q.d > 25;
+    if (seaside) { if (rng() < 0.45) return; h = Math.min(h, 10 + rng() * 12); }
     const w = 14 + rng() * (18 + u * 22), dpt = 12 + rng() * (16 + u * 18);
     // Align to the course near it, to a city grid farther out.
     const heading = q.dist < 260 ? track.heading(q.s) : (fbm(x * 0.00035 + 3, z * 0.00035 + 3, 3) > 0.5 ? 0.78 : 0.12);

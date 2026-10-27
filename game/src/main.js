@@ -39,6 +39,9 @@ async function boot() {
   if (!renderer.capabilities.isWebGL2) throw new Error('WebGL2 is required');
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.NoToneMapping;
+  // HDR render targets need float colour buffers; fall back to 8-bit if unavailable.
+  const ext = renderer.extensions;
+  quality.hdrType = (ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float')) ? THREE.HalfFloatType : THREE.UnsignedByteType;
   canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); $('ld-msg').textContent = 'GPU RESET…'; $('loading').classList.remove('hide'); });
   canvas.addEventListener('webglcontextrestored', () => location.reload());
 

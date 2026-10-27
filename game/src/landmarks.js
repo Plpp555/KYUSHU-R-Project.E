@@ -223,7 +223,7 @@ export function buildLandmarks(track) {
 
   // 百道 tower blocks around the tower (TNC etc.).
   for (let i = 0; i < 6; i++) {
-    const p = groundPoint(track, 1150 + i * 120, 170 + (i % 2) * 50);
+    const p = groundPoint(track, 1150 + i * 120, -(150 + (i % 2) * 60));
     group.add(towerBuilding(p, heading(1000 + i * 140), 40 + i * 3, 32, 70 + (i * 37) % 60, 10 + i, 0.45, 0.7));
   }
 

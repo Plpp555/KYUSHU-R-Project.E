@@ -61,7 +61,7 @@ export class World {
     }
 
     // Dynamic environment for reflective car paint.
-    this.envRT = new THREE.WebGLCubeRenderTarget(quality.envSize, { type: THREE.HalfFloatType, generateMipmaps: false });
+    this.envRT = new THREE.WebGLCubeRenderTarget(quality.envSize, { type: quality.hdrType ?? THREE.HalfFloatType, generateMipmaps: false });
     this.cubeCam = new THREE.CubeCamera(0.5, 2200, this.envRT);
     for (const c of this.cubeCam.children) c.layers.set(LAYER.ENV);
     this.scene.add(this.cubeCam);
@@ -70,11 +70,11 @@ export class World {
     this.envPrimed = false;
 
     // Planar reflections.
-    this.roadRefl = new PlanarReflection(quality.roadReflection || 0.5);
+    this.roadRefl = new PlanarReflection(quality.roadReflection || 0.5, quality.hdrType ?? THREE.HalfFloatType);
     this.roadRefl.enabled = quality.roadReflection > 0;
     U.uReflTex.value = this.roadRefl.rt.texture;
     U.uReflMat.value = this.roadRefl.textureMatrix;
-    this.waterRefl = new PlanarReflection(quality.waterReflection || 0.35);
+    this.waterRefl = new PlanarReflection(quality.waterReflection || 0.35, quality.hdrType ?? THREE.HalfFloatType);
     this.waterRefl.enabled = quality.waterReflection > 0;
     this.waterRefl.camera.layers.set(LAYER.WATER);
     this.waterRefl.far = 3000;

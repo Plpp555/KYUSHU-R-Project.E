@@ -81,7 +81,7 @@ export class PostFX {
     this.quality = quality;
     const useAO = quality.ao;
     const msaa = useAO ? 0 : quality.msaa;
-    this.composer = new EffectComposer(renderer, { frameBufferType: THREE.HalfFloatType, multisampling: msaa });
+    this.composer = new EffectComposer(renderer, { frameBufferType: quality.hdrType ?? THREE.HalfFloatType, multisampling: msaa });
     this.renderPass = new RenderPass(scene, camera);
     this.composer.addPass(this.renderPass);
     if (useAO) {

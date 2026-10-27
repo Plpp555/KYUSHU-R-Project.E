@@ -339,7 +339,6 @@ export class Game {
       if (p.s >= GOAL_S) return this.finish('win', 'GOAL — 先にゴール！');
       if (this.rival.s >= GOAL_S) return this.finish('lose', 'カウンタックが先にゴール');
       if (gap > BREAKAWAY) return this.finish('win', `${BREAKAWAY}m 引き離した！`);
-      if (gap < -BREAKAWAY * 2) return this.finish('lose', `${BREAKAWAY * 2}m 引き離された…`);
     } else if (p.s >= GOAL_S) return this.finish('goal', '');
     if (this.timeLeft <= 0) { this.timeLeft = 0; return this.finish('timeup', ''); }
   }

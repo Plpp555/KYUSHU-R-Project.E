@@ -78,7 +78,7 @@ export class Rival {
     // Rubber band.
     const gap = this.s - player.s;
     // gap > 0: rival ahead -> ease off; gap < 0: player ahead -> push harder.
-    if (gap > 60) vT *= clamp(1 - (gap - 60) * 0.0016 / this.difficulty, 0.52, 1);
+    if (gap > 60) vT *= clamp(1 - (gap - 60) * 0.0018 / this.difficulty, 0.45, 1);
     if (gap < -30) vT *= 1 + clamp((-gap - 30) / 700, 0, 0.08) * this.difficulty;
     const blocked = freeAhead(this.d);
     if (blocked < 25 + this.v * 0.7) {
