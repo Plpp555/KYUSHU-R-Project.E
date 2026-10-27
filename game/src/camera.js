@@ -104,7 +104,7 @@ export class CameraRig {
     const k = c.t / shotLen;
     switch (shot) {
       case 'front':
-        P.copy(t.pos).addScaledVector(this._f, 8.5 - k * 2.5).addScaledVector(this._l, 2.4).addScaledVector(this._u, 0.75);
+        P.copy(t.pos).addScaledVector(this._f, 7.5 - k * 2.0).addScaledVector(this._l, 3.6).addScaledVector(this._u, 0.7);
         this.look.copy(t.pos).addScaledVector(this._u, 0.6);
         fov = 38;
         break;

@@ -35,7 +35,7 @@ export class Rival {
     const look = 40 + v * 2.2;
     let k = 0;
     for (let x = s; x < s + look; x += 8) k = Math.max(k, Math.abs(this.track.curvature(x)));
-    const aLat = 13.2 + this.difficulty * 1.2;
+    const aLat = 12.4 + this.difficulty * 0.8;
     return k > 1e-5 ? Math.sqrt(aLat / k) : 999;
   }
 
@@ -77,8 +77,9 @@ export class Rival {
     let vT = Math.min(this.top, this.maxCornerSpeed(this.s, this.v));
     // Rubber band.
     const gap = this.s - player.s;
-    if (gap > 120) vT *= clamp(1 - (gap - 120) / 1400, 0.86, 1);
-    if (gap < -40) vT *= 1 + clamp((-gap - 40) / 900, 0, 0.09) * this.difficulty;
+    // gap > 0: rival ahead -> ease off; gap < 0: player ahead -> push harder.
+    if (gap > 60) vT *= clamp(1 - (gap - 60) * 0.0016 / this.difficulty, 0.52, 1);
+    if (gap < -30) vT *= 1 + clamp((-gap - 30) / 700, 0, 0.08) * this.difficulty;
     const blocked = freeAhead(this.d);
     if (blocked < 25 + this.v * 0.7) {
       const lead = traffic.leader(this.s, this.d, this.halfW, null);

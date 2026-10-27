@@ -277,8 +277,8 @@ export class HUD {
     const g = this.g;
     const blink = Math.floor(performance.now() / 180) % 2;
     if (!blink) return;
-    const x = st.rivalSide > 0 ? W * 0.12 : W * 0.88;
-    const y = H * 0.78;
+    const x = st.rivalSide > 0 ? W * 0.32 : W * 0.68;
+    const y = H * 0.7;
     g.fillStyle = 'rgba(255,43,58,0.9)'; g.shadowColor = '#ff2b3a'; g.shadowBlur = 16;
     g.beginPath();
     const d = st.rivalSide > 0 ? -1 : 1;

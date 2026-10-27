@@ -71,7 +71,7 @@ void main(){
   m = clamp(m, 0.0, 1.0) * (1.0 - medianM) * (0.78 + 0.22 * n2);
 
   // Expansion joints at each pier (steel finger joints).
-  float joint = lineMask(mod(s - 6.0, 36.0) - 18.0, 0.32) * (1.0 - medianM);
+  float joint = lineMask(mod(s - 6.0, 36.0) - 18.0, 0.2) * (1.0 - medianM);
 
   // Water: puddles from low-frequency noise + ruts.
   float puddle = smoothstep(0.46, 0.64, fbm(vec2(d * 0.21, s * 0.05) + 13.7) + wheel * 0.14);
@@ -84,7 +84,7 @@ void main(){
 
   albedo = mix(albedo, vec3(0.58, 0.58, 0.55), m);
   albedo = mix(albedo, vec3(0.16, 0.16, 0.16), medianM);
-  albedo = mix(albedo, vec3(0.32, 0.32, 0.34), joint);
+  albedo = mix(albedo, vec3(0.1, 0.1, 0.11), joint);
   albedo *= mix(1.0, 0.62, wet * (1.0 - 0.6 * m));
 
   vec3 N = normalize(vN);
@@ -131,7 +131,8 @@ void main(){
     col += uEnvTint * reflAmt;
   }
   col = applyFog(col, vWorld);
-  gl_FragColor = vec4(col, 1.0);
+  if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+  gl_FragColor = vec4(min(col, vec3(64.0)), 1.0);
 }`;
 
 // Surface types: 0 concrete parapet, 1 tunnel, 2 sound wall, 3 deck underside/fascia, 4 median barrier
@@ -175,7 +176,7 @@ void main(){
     f0 = 0.08;
     H = rib * 0.0012 * detail * (1.0 - post);
     // Top lip highlight
-    albedo = mix(albedo, vec3(0.3), smoothstep(3.45, 3.5, h));
+    albedo = mix(albedo, vec3(0.3), smoothstep(2.82, 2.88, h));
   } else {
     float streaks = fbm3(vec2(s * 0.7, h * 0.12)) * 0.6 + fbm3(vec2(s * 0.05, h)) * 0.4;
     float grime = smoothstep(0.6, -0.3, h) * 0.5;
@@ -195,7 +196,8 @@ void main(){
   col += carLights(vWorld, N, V, albedo, rough, f0, headLit);
   col += emit;
   col = applyFog(col, vWorld);
-  gl_FragColor = vec4(col, 1.0);
+  if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+  gl_FragColor = vec4(min(col, vec3(64.0)), 1.0);
 }`;
 
 export function makeRoadMaterial() {

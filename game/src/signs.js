@@ -118,6 +118,7 @@ export function buildSigns(track) {
   const f = makeFrame();
   const steel = new THREE.MeshStandardMaterial({ color: 0x8b9096, metalness: 0.8, roughness: 0.4 });
   const leds = [];
+  const signLightMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 3, 2.7) });
 
   for (const sign of SIGNS) {
     const g = new THREE.Group();
@@ -134,11 +135,9 @@ export function buildSigns(track) {
       back.position.set(-0.3, 6.6 + ph / 2 - 0.7, -0.6);
       g.add(back);
       // Sign lights under the panel.
-      for (let x = -pw / 2 + 1; x < pw / 2; x += 2.4) {
-        const l = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.25), new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 3, 2.7) }));
-        l.position.set(x - 0.3, 6.6 - 0.85, -1.2);
-        g.add(l);
-      }
+      const lg = [];
+      for (let x = -pw / 2 + 1; x < pw / 2; x += 2.4) lg.push(new THREE.BoxGeometry(0.5, 0.12, 0.25).translate(x - 0.3, 6.6 - 0.85, -1.2));
+      g.add(new THREE.Mesh(mergeGeometries(lg), signLightMat));
     } else {
       const tex = ledTexture(sign.text);
       const mat = new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(2.4, 2.4, 2.4) });
@@ -153,25 +152,24 @@ export function buildSigns(track) {
     }
     placeAt(g, track, sign.s, 0, 0, f);
     g.updateMatrixWorld(true);
-    setLayers(g, ...ALL);
+    setLayers(g, LAYER.MAIN, LAYER.REFLECT);
     group.add(g);
   }
 
   // Speed limit signs (60 km/h — the real limit on the urban expressway).
   const spTex = speedTexture(60);
   const spMat = new THREE.MeshBasicMaterial({ map: spTex, transparent: true, color: new THREE.Color(1.2, 1.2, 1.2) });
-  const poleGeo = new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6).translate(0, 1.3 + 1.1, 0);
+  const poles = [], discs = [];
+  const tmp = new THREE.Object3D();
   for (let s = 260; s < GOAL_S; s += 900) {
-    const g = new THREE.Group();
-    g.add(new THREE.Mesh(poleGeo, steel));
-    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.6, 32), spMat);
-    disc.position.set(0, 3.6, 0); disc.rotation.y = Math.PI;
-    g.add(disc);
-    placeAt(g, track, s, HALF_W + 0.35, 0, f);
-    g.updateMatrixWorld(true);
-    setLayers(g, LAYER.MAIN, LAYER.REFLECT);
-    group.add(g);
+    placeAt(tmp, track, s, HALF_W + 0.35, 0, f);
+    poles.push(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 6).translate(0, 1.3 + 1.1, 0).applyMatrix4(tmp.matrix));
+    discs.push(new THREE.CircleGeometry(0.6, 32).rotateY(Math.PI).translate(0, 3.6, 0).applyMatrix4(tmp.matrix));
   }
+  const speedSigns = new THREE.Group();
+  speedSigns.add(new THREE.Mesh(mergeGeometries(poles), steel), new THREE.Mesh(mergeGeometries(discs), spMat));
+  setLayers(speedSigns, LAYER.MAIN, LAYER.REFLECT);
+  group.add(speedSigns);
 
   // Arcade banners.
   const cpTex = bannerTexture('CHECK POINT');
@@ -196,8 +194,13 @@ export function buildSigns(track) {
   setLayers(goal, ...ALL);
   group.add(goal);
 
+  const gantries = group.children.filter(c => c !== speedSigns);
+  for (const g of gantries) { g.userData.s = track.project(g.matrix.elements[12], g.matrix.elements[14]).s; }
   return {
     group,
-    update(t) { for (const m of leds) m.color.setScalar(2.0 + 0.3 * Math.sin(t * 2.0)); },
+    update(t, camS = 0) {
+      for (const m of leds) m.color.setScalar(2.0 + 0.3 * Math.sin(t * 2.0));
+      for (const g of gantries) g.visible = Math.abs(g.userData.s - camS) < 1400;
+    },
   };
 }

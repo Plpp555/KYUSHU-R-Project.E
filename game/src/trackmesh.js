@@ -8,7 +8,7 @@ import { TUNNEL, BRIDGE, ZONES } from './course.js';
 import { makeRoadMaterial, makeSurfaceMaterial } from './trackmaterials.js';
 import { LAYER, setLayers, mulberry32 } from './util.js';
 
-const CHUNK = 400;
+const CHUNK = 1000;
 const LEFT_EDGE = HALF_W;                 // 6.25
 const RIGHT_EDGE = ONCOMING_D - HALF_W;   // -20.75
 
@@ -79,7 +79,7 @@ const PARAPET_L = [[LEFT_EDGE + 0.6, -2.0], [LEFT_EDGE + 0.6, 1.1], [LEFT_EDGE +
 const PARAPET_R = mirror(PARAPET_L, (LEFT_EDGE + RIGHT_EDGE) / 2);
 const MEDIAN = [[MEDIAN_D + 0.3, 0], [MEDIAN_D + 0.15, 0.9], [MEDIAN_D - 0.15, 0.9], [MEDIAN_D - 0.3, 0]];
 const UNDERSIDE = [[RIGHT_EDGE - 0.6, -2.0], [LEFT_EDGE + 0.6, -2.0]];
-const SOUNDWALL_L = [[LEFT_EDGE + 0.42, 3.55], [LEFT_EDGE + 0.42, 1.1]];
+const SOUNDWALL_L = [[LEFT_EDGE + 0.42, 2.9], [LEFT_EDGE + 0.42, 1.1]];
 const SOUNDWALL_R = mirror(SOUNDWALL_L, (LEFT_EDGE + RIGHT_EDGE) / 2);
 const ROAD = (() => {
   const ds = [LEFT_EDGE, 5.4, 5.2, 3.5, 1.85, 1.65, 0, -1.65, -1.85, -3.5, -5.2, -5.4, -6.25, -7.25, -8.25];
@@ -201,7 +201,7 @@ export function buildTrack(track) {
   for (let s = Math.ceil(TUNNEL.s0 / 6) * 6; s < TUNNEL.s1; s += 6) {
     tl.push(frameMatrix(track, s, 4.6, 5.3, f), frameMatrix(track, s, -4.6, 5.3, f));
   }
-  const tLampMat = new THREE.MeshBasicMaterial({ color: LAMP.tunnelColor.clone().multiplyScalar(30) });
+  const tLampMat = new THREE.MeshBasicMaterial({ color: LAMP.tunnelColor.clone().multiplyScalar(14) });
   group.add(instanced(new THREE.BoxGeometry(0.28, 0.1, 1.4), tLampMat, tl, ALL));
   const fans = [];
   for (let s = TUNNEL.s0 + 80; s < TUNNEL.s1 - 60; s += 130) {
@@ -348,7 +348,7 @@ function buildBridge(track) {
         gl_FragColor = vec4(c, 1.0);
       }`,
   });
-  const cableMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.85, 0.9, 1.0).multiplyScalar(2.2) });
+  const cableMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.85, 0.9, 1.0).multiplyScalar(1.1) });
   const cableGeos = [];
   for (const ps of BRIDGE.pylons) {
     track.frame(ps, f);
@@ -382,7 +382,7 @@ function buildBridge(track) {
           const a = apex.clone().addScaledVector(f.left, 0).add(new THREE.Vector3(0, -i * 1.6, 0));
           const b = track.point(s, side, 0.2);
           const len = a.distanceTo(b);
-          const c = new THREE.CylinderGeometry(0.09, 0.09, len, 5, 1, true);
+          const c = new THREE.CylinderGeometry(0.06, 0.06, len, 5, 1, true);
           const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
           c.applyQuaternion(q).translate((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2);
           cableGeos.push(c);

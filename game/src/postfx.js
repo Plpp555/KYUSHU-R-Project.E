@@ -25,9 +25,9 @@ class LensEffect extends Effect {
           float t = (float(i) + j) / float(N);
           vec2 o = dir * amt * t;
           vec2 ca = dir * uCA * (0.3 + r * 2.0);
-          acc.r += texture2D(inputBuffer, uv - o + ca).r;
-          acc.g += texture2D(inputBuffer, uv - o).g;
-          acc.b += texture2D(inputBuffer, uv - o - ca).b;
+          vec3 smp = vec3(texture2D(inputBuffer, uv - o + ca).r, texture2D(inputBuffer, uv - o).g, texture2D(inputBuffer, uv - o - ca).b);
+          if (any(isnan(smp)) || any(isinf(smp))) smp = vec3(0.0);
+          acc += min(smp, vec3(64.0));
         }
         acc /= float(N);
         float v = smoothstep(0.35, 1.05, r * 1.25);
@@ -65,7 +65,7 @@ class GradeEffect extends Effect {
         outputColor = vec4(clamp(c, 0.0, 1.0), 1.0);
       }`, {
       uniforms: new Map([
-        ['uGrain', new THREE.Uniform(0.035)],
+        ['uGrain', new THREE.Uniform(0.022)],
         ['uSat', new THREE.Uniform(1.08)],
         ['uShadow', new THREE.Uniform(new THREE.Vector3(-0.004, 0.0, 0.012))],
         ['uHighlight', new THREE.Uniform(new THREE.Vector3(0.02, 0.008, -0.01))],
@@ -97,9 +97,15 @@ export class PostFX {
       this.composer.addPass(this.ao);
     }
     this.bloom = new BloomEffect({
-      mipmapBlur: true, luminanceThreshold: 0.85, luminanceSmoothing: 0.35,
+      mipmapBlur: true, luminanceThreshold: 0.95, luminanceSmoothing: 0.3,
       intensity: quality.bloom, radius: 0.82, levels: quality.bloomLevels,
     });
+    // Never let a stray NaN/Inf pixel flood the bloom mip chain (it would black out the frame).
+    const lm = this.bloom.luminanceMaterial;
+    if (lm && lm.fragmentShader) {
+      lm.fragmentShader = lm.fragmentShader.replace(/}\s*$/, '  if (any(isnan(gl_FragColor)) || any(isinf(gl_FragColor))) gl_FragColor = vec4(0.0);\n  gl_FragColor = min(gl_FragColor, vec4(8.0));\n}\n');
+      lm.needsUpdate = true;
+    }
     this.composer.addPass(new EffectPass(camera, this.bloom));
     this.lens = new LensEffect();
     this.composer.addPass(new EffectPass(camera, this.lens));

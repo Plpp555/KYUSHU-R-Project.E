@@ -23,14 +23,14 @@ export const LAMP = {
   tunnelRows: [4.6, -4.6],
   tunnelHeight: 5.3,
   tunnelColor: new THREE.Color(1.0, 0.52, 0.16),
-  tunnelIntensity: 200,
+  tunnelIntensity: 85,
 };
 
 const vec3s = n => Array.from({ length: n }, () => new THREE.Vector3());
 
 export const U = {
   uTime: { value: 0 },
-  uFogColor: { value: new THREE.Color(0.018, 0.02, 0.034) },
+  uFogColor: { value: new THREE.Color(0.022, 0.021, 0.036) },
   uFogDensity: { value: 0.0016 },
   uWet: { value: 0.85 },
   uRain: { value: 0 },
@@ -76,7 +76,7 @@ vec3 brdfLight(vec3 P, vec3 N, vec3 V, vec3 Lp, vec3 col, vec3 albedo, float rou
   if (NoL <= 0.0) return vec3(0.0);
   vec3 H = normalize(L + V);
   float NoH = max(dot(N, H), 0.0), NoV = max(dot(N, V), 1e-3);
-  float a = max(rough*rough, 0.002);
+  float a = max(rough*rough, 0.012);   // punctual lights: avoid razor-thin, ultra-bright highlights
   float F = f0 + (1.0-f0)*pow(1.0 - max(dot(H, V), 0.0), 5.0);
   float spec = D_GGX(a, NoH) * V_Smith(a, NoV, NoL) * F;
   return col * NoL * (albedo / PI + spec) / (d2 + 0.6);

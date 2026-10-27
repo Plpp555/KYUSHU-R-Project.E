@@ -60,7 +60,10 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ states
-  setState(s) { this.state = s; this.stateT = 0; }
+  setState(s) {
+    this.state = s; this.stateT = 0;
+    if (this.onState) this.onState(s);
+  }
 
   enterTitle() {
     this.setState('title');
@@ -116,7 +119,9 @@ export class Game {
     p.reset(START_S, mode === 'battle' ? 1.75 : 0, 0);
     this.rivalVis.root.visible = mode === 'battle';
     this.rival.reset(START_S, -1.75);
+    this.rival.targetD = -3.5;
     this.rival.difficulty = 1;
+    this.autopilot.targetD = mode === 'battle' ? 3.5 : 0;
     this.traffic.reset(START_S, START_S);
     for (const c of this.traffic.cars) if (c.s < START_S + 160) this.traffic.spawnSafe(c, START_S + 160 + Math.random() * 500);
     this.timeLeft = mode === 'free' ? Infinity : TIME_START;
@@ -223,6 +228,7 @@ export class Game {
 
   updateCountdown(dt, inp) {
     const p = this.player;
+    if (this.autodrive) inp = { throttle: this.stateT > 2.5 ? 1 : 0, brake: 0, steer: 0 };
     if (this.stateT < 0.05) { this.hud.visible = true; this.input.showTouch(true); this.countN = 4; }
     // Free revving on the line.
     p.throttle = lerp(p.throttle, inp.throttle, 1 - Math.exp(-10 * dt));
@@ -250,11 +256,12 @@ export class Game {
 
   updateRace(dt, inp) {
     const p = this.player;
+    if (this.autodrive) { inp = this.autopilot.inputs(p, dt); this.autopilot.cruise = 330 / 3.6; }
     this.elapsed += dt;
     if (this.mode !== 'free') this.timeLeft -= dt;
     p.step(dt, inp);
     if (this.mode === 'battle') this.rival.update(dt, p, this.traffic, true);
-    this.traffic.update(dt, p.s, this.camera);
+    this.traffic.update(dt, p.s, this.camera, this.mode === 'battle' ? [p, this.rival] : [p]);
     this.slipstream(dt);
     this.collideTraffic(false);
     if (this.mode === 'battle') this.collideRival();
@@ -332,7 +339,7 @@ export class Game {
       if (p.s >= GOAL_S) return this.finish('win', 'GOAL — 先にゴール！');
       if (this.rival.s >= GOAL_S) return this.finish('lose', 'カウンタックが先にゴール');
       if (gap > BREAKAWAY) return this.finish('win', `${BREAKAWAY}m 引き離した！`);
-      if (gap < -BREAKAWAY) return this.finish('lose', `${BREAKAWAY}m 引き離された…`);
+      if (gap < -BREAKAWAY * 2) return this.finish('lose', `${BREAKAWAY * 2}m 引き離された…`);
     } else if (p.s >= GOAL_S) return this.finish('goal', '');
     if (this.timeLeft <= 0) { this.timeLeft = 0; return this.finish('timeup', ''); }
   }
@@ -480,7 +487,7 @@ export class Game {
   }
 
   impact(strength, side) {
-    if (strength < 1) return;
+    if (strength < 1 || this.state !== 'race') return;
     this.crashes += strength > 6 ? 1 : 0;
     this.audio.impact(clamp(strength / 8, 0.3, 2), clamp(-side * 0.4, -1, 1));
     this.rig.addShake(clamp(strength / 10, 0.2, 1.2));
@@ -573,10 +580,9 @@ export class Game {
   updateLights() {
     const p = this.player, pv = this.playerVis;
     const spots = [], points = [];
-    const addHeads = (vis, intensity) => {
-      const m = vis.root.matrixWorld;
+    const addHeads = (m, meta, intensity) => {
       const fwd = this._v2.set(m.elements[8], m.elements[9] - 0.06, m.elements[10]).normalize();
-      for (const h of vis.meta.lights.head) {
+      for (const h of meta.lights.head) {
         const s = this.spots[spots.length];
         if (!s) break;
         s.pos.set(h[0], h[1], h[2] + 0.1).applyMatrix4(m);
@@ -585,32 +591,30 @@ export class Game {
         spots.push(s);
       }
     };
-    const addTail = (vis, brake, pos) => {
+    const addTail = (m, meta, brake) => {
       const pt = this.points[points.length];
       if (!pt) return;
-      const t = vis.meta.lights.tail[0];
-      pt.pos.set(0, t ? t[1] : 0.7, -vis.meta.size[2] / 2 - 0.25).applyMatrix4(vis.root.matrixWorld);
+      const t = meta.lights.tail[0];
+      pt.pos.set(0, t ? t[1] : 0.7, -meta.size[2] / 2 - 0.25).applyMatrix4(m);
       pt.col.setRGB(1, 0.04, 0.02).multiplyScalar(3.5 + brake * 12);
       points.push(pt);
-      void pos;
     };
     pv.root.updateMatrixWorld();
-    addHeads(pv, 1700);
-    addTail(pv, p.brake);
+    addHeads(pv.root.matrixWorld, pv.meta, 1150);
+    addTail(pv.root.matrixWorld, pv.meta, p.brake);
     if (this.rivalVis.root.visible) {
       this.rivalVis.root.updateMatrixWorld();
-      addHeads(this.rivalVis, 1500);
-      addTail(this.rivalVis, this.rival.brake);
+      addHeads(this.rivalVis.root.matrixWorld, this.rivalVis.meta, 1050);
+      addTail(this.rivalVis.root.matrixWorld, this.rivalVis.meta, this.rival.brake);
     }
     // Nearest traffic.
     const near = this.traffic.cars.filter(c => c.active && Math.abs(c.s - p.s) < 160).sort((a, b) => Math.abs(a.s - p.s) - Math.abs(b.s - p.s));
     for (const c of near) {
       if (points.length >= this.points.length) break;
-      c.visual.root.updateMatrixWorld();
-      addTail(c.visual, c.brake);
+      addTail(c.matrix, c.meta, c.brake);
     }
     const ahead = near.find(c => c.s > p.s + 8);
-    if (ahead && spots.length < 6) addHeads(ahead.visual, 900);
+    if (ahead && spots.length < 6) addHeads(ahead.matrix, ahead.meta, 900);
     setCarLights(spots, points);
     // Three.js spotlights follow the player's headlights.
     for (let i = 0; i < 2; i++) {

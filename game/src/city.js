@@ -192,8 +192,9 @@ vec3 land(vec2 p, float px){
   float poolZ = exp(-(lp.y * lp.y) / 40.0) * stX;
   vec3 sodium = vec3(1.0, 0.55, 0.2);
   col += sodium * (poolX + poolZ) * 0.18 * mix(0.6, 1.0, lampDetail);
-  float dotX = exp(-(lp.x * lp.x + pow(e.y * 2.0 - sw, 2.0)) / max(0.8, px * px)) * stZ;
-  float dotZ = exp(-(lp.y * lp.y + pow(e.x * 2.0 - sw, 2.0)) / max(0.8, px * px)) * stX;
+  float ey = e.y * 2.0 - sw, ex = e.x * 2.0 - sw;
+  float dotX = exp(-(lp.x * lp.x + ey * ey) / max(0.8, px * px)) * stZ;
+  float dotZ = exp(-(lp.y * lp.y + ex * ex) / max(0.8, px * px)) * stX;
   col += sodium * (dotX + dotZ) * 3.0 * lampDetail;
   // Moving traffic on main streets.
   float trafX = main * stX, trafZ = mainZ * stZ;
@@ -255,7 +256,8 @@ void main(){
   col += vec3(1.0, 0.85, 0.65) * shore * (0.15 + 2.5 * smoothstep(0.9, 1.0, ld) * (1.0 - smoothstep(2.0, 6.0, px)));
   float f = 1.0 - exp(-pow(uFogDensity * dist * 0.8, 2.0));
   col = mix(col, uFogColor * vec3(1.2, 1.0, 0.9), f);
-  gl_FragColor = vec4(col, 1.0);
+  if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+  gl_FragColor = vec4(min(col, vec3(64.0)), 1.0);
 }`;
 
 // ---------------------------------------------------------------------------------
@@ -334,8 +336,9 @@ void main(){
     float corridor = 0.0;
     if (apt && mod(vFace, 2.0) < 1.0 && g.y > 0.0) {
       vec2 cf = vec2(fract(vUv2.x / 4.2) - 0.5, f.y - 0.12);
-      corridor = exp(-dot(cf * vec2(14.0, 22.0), cf * vec2(14.0, 22.0)));
-      detailed = mix(wall * 1.5, detailed, 0.25) + vec3(1.0, 0.86, 0.7) * corridor * 3.0 + vec3(0.06, 0.05, 0.04) * smoothstep(0.2, 0.0, abs(f.y - 0.12));
+      float unitOn = step(0.28, hash12(vec2(floor(vUv2.x / 4.2), id.y + seed * 7.0)));
+      corridor = exp(-dot(cf * vec2(14.0, 22.0), cf * vec2(14.0, 22.0))) * unitOn * (0.55 + 0.45 * hash12(vec2(id.y, seed)));
+      detailed = mix(wall * 1.5, detailed, 0.3) + vec3(1.0, 0.9, 0.78) * corridor * 1.8 + vec3(0.025, 0.022, 0.018) * smoothstep(0.2, 0.0, abs(f.y - 0.12));
     }
     // Ground floor shops.
     float shopId = hash12(vec2(floor(vUv2.x / 7.0), seed));
@@ -353,9 +356,10 @@ void main(){
     vec3 crownC = mix(vec3(0.35, 0.6, 1.0), vec3(1.0, 0.85, 0.6), hash12(vec2(seed, 12.0))) * 1.6;
     col = mix(col, crownC, crown);
   }
-  float fo = 1.0 - exp(-pow(uFogDensity * dist, 2.0));
-  col = mix(col, uFogColor * vec3(1.15, 1.0, 0.9), fo);
-  gl_FragColor = vec4(col, 1.0);
+  float fo = 1.0 - exp(-pow(uFogDensity * dist * 0.8, 2.0));
+  col = mix(col, uFogColor * vec3(1.25, 1.0, 1.05), fo);
+  if (any(isnan(col)) || any(isinf(col))) col = vec3(0.0);
+  gl_FragColor = vec4(min(col, vec3(64.0)), 1.0);
 }`;
 
 export function buildingMaterial(geomUV = false) {

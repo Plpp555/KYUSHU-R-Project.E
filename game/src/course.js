@@ -45,8 +45,8 @@ export const BRIDGE = { s0: 3420, s1: 4420, pylons: [3720, 4120], mainSpan: [352
 
 // Checkpoints add time in TIME ATTACK / BATTLE (arcade time extension).
 export const CHECKPOINTS = [2500, 4600, 6450, 8400];
-export const TIME_START = 62;
-export const TIME_EXTEND = [24, 26, 26, 26];
+export const TIME_START = 75;
+export const TIME_EXTEND = [32, 32, 32, 30];
 
 // Overhead guide signs (green) and LED boards.
 export const SIGNS = [

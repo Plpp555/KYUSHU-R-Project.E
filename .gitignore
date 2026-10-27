@@ -3,3 +3,4 @@ game/dist/
 android/build/
 *.log
 .DS_Store
+dist/*.idsig

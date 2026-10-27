@@ -13,6 +13,8 @@ import { HUD } from './hud.js';
 import { UI } from './ui.js';
 import { Input } from './input.js';
 import { AudioSys } from './audio.js';
+import { CHECKPOINTS } from './course.js';
+const CHECKPOINTS_IDX = s => CHECKPOINTS.filter(c => c <= s).length;
 
 const params = new URLSearchParams(location.search);
 const settings = defaultSettings();
@@ -92,6 +94,11 @@ async function boot() {
   document.addEventListener('visibilitychange', () => { if (document.hidden) window.__appPause(); else window.__appResume(); });
 
   // Debug / screenshot hooks: ?race=battle&at=4000
+  if (params.has('autodrive')) {
+    game.autodrive = true;
+    window.__log = [];
+    game.onState = st => window.__log.push([st, +game.elapsed?.toFixed?.(2) || 0, Math.round(game.player.s), Math.round(game.rival.s), game.finished && game.finished.outcome]);
+  }
   if (params.has('race')) {
     audio.init();
     game.startRace(params.get('race'));
@@ -101,6 +108,7 @@ async function boot() {
       game.rival.reset(at + +(params.get('rg') || 25), -3.5); game.rival.v = game.player.v;
       game.traffic.reset(at, at);
       game.ui.clear(); game.hud.visible = true; game.input.showTouch(true);
+      game.cpIndex = CHECKPOINTS_IDX(at); game.timeLeft = 90;
       game.setState('race'); game.rig.resetFollow();
     }
     if (params.has('cam')) game.rig.setMode(params.get('cam'));
@@ -112,15 +120,22 @@ async function boot() {
   let last = performance.now();
   let frames = 0;
   const fixedDt = params.has('dt') ? +params.get('dt') : 0;
+  const noRender = params.has('norender');
   function loop(now) {
     let dt = Math.min(0.05, (now - last) / 1000);
     if (fixedDt) dt = fixedDt;
     last = now;
+    renderer.info.autoReset = false;
+    renderer.info.reset();
     game.update(dt);
-    world.prerender(camera, game.player.pos);
-    fx.render(dt);
+    if (!noRender) {
+      world.prerender(camera, game.player.pos);
+      fx.render(dt);
+    }
     frames++;
     window.__frames = frames;
+    window.__stats = Object.assign({}, world.stats, { total: renderer.info.render.calls });
+    window.__calls = renderer.info.render.calls; window.__tris = renderer.info.render.triangles;
     if (window.__capture) {
       // Debug capture (same task as the draw, so the drawing buffer is still valid).
       const c2 = document.createElement('canvas');
@@ -134,7 +149,7 @@ async function boot() {
     }
     window.__ft = performance.now() - now;
     if (window.__pause) { window.__paused = true; return; }
-    requestAnimationFrame(loop);
+    if (noRender) setTimeout(() => loop(performance.now()), 0); else requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
 }

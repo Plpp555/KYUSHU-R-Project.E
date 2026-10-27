@@ -59,7 +59,7 @@ if [ ! -f "$KEYSTORE" ]; then
     -dname "CN=KYUSHU-R Project.E, O=KYUSHU-R, C=JP" 2>/dev/null
 fi
 apksigner sign --ks "$KEYSTORE" --ks-pass "pass:$KS_PASS" --ks-key-alias kyushur \
-  --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true \
+  --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true --v4-signing-enabled false \
   --out "$OUT_APK" "$B/aligned.apk"
 apksigner verify "$OUT_APK"
 echo "APK: $OUT_APK ($(du -h "$OUT_APK" | cut -f1))"

@@ -186,19 +186,19 @@ export class CarVisual {
     this.headGlows = [];
     if (headlights) {
       for (const p of L.head) {
-        const s = new THREE.Sprite(glowMaterial(new THREE.Color(1, 0.95, 0.85), 4));
+        const s = new THREE.Sprite(glowMaterial(new THREE.Color(1, 0.95, 0.85), 2.4));
         s.position.set(p[0], p[1], p[2] + 0.08);
         s.scale.setScalar(0.9);
         this.body.add(s);
         this.headGlows.push(s);
-        const st = new THREE.Sprite(glowMaterial(new THREE.Color(0.85, 0.9, 1.0), 1.2, streakTexture()));
+        const st = new THREE.Sprite(glowMaterial(new THREE.Color(0.85, 0.9, 1.0), 0.8, streakTexture()));
         st.position.set(p[0], p[1], p[2] + 0.1);
         st.scale.set(4.5, 0.3, 1);
         this.body.add(st);
         this.headGlows.push(st);
       }
     }
-    if (beams) this.body.add(this.makeBeams(L.head));
+    if (beams) { this.beams = this.makeBeams(L.head); this.body.add(this.beams); }
     setLayers(root, LAYER.MAIN, LAYER.REFLECT);
     sh.layers.set(LAYER.MAIN);
 
@@ -217,7 +217,7 @@ export class CarVisual {
         void main(){ vZ = position.z / 26.0; vec4 wp = modelMatrix * vec4(position,1.0); vN = normalize(mat3(modelMatrix)*normal); vV = normalize(cameraPosition - wp.xyz); gl_Position = projectionMatrix * viewMatrix * wp; }`,
       fragmentShader: /* glsl */`
         uniform vec3 uCol; varying float vZ; varying vec3 vN; varying vec3 vV;
-        void main(){ float e = pow(abs(dot(normalize(vN), vV)), 2.0); float a = e * pow(1.0 - vZ, 2.0) * smoothstep(0.0, 0.08, vZ); gl_FragColor = vec4(uCol * a, 1.0); }`,
+        void main(){ float e = pow(abs(dot(normalize(vN), vV)), 2.0); float fz = clamp(1.0 - vZ, 0.0, 1.0); float a = e * fz * fz * smoothstep(0.0, 0.08, vZ); gl_FragColor = vec4(uCol * a, 1.0); }`,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     });
     for (const p of heads) {
@@ -251,6 +251,8 @@ export class CarVisual {
     const dx = camera.position.x - e[12], dy = camera.position.y - e[13], dz = camera.position.z - e[14];
     const l = Math.hypot(dx, dy, dz) || 1;
     const dot = (fx * dx + fy * dy + fz * dz) / l;
+    // Volumetric beams read from behind/side; from the front they'd swallow the camera.
+    if (this.beams) this.beams.visible = dot < 0.15;
     const k = Math.min(1, Math.max(0, (dot - 0.05) / 0.5));
     for (let i = 0; i < this.headGlows.length; i++) {
       const s = this.headGlows[i];

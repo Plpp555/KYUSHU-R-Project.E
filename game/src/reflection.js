@@ -45,9 +45,15 @@ export class PlanarReflection {
     vc.position.copy(view);
     vc.up.set(0, 1, 0).applyMatrix4(rot).reflect(normal);
     vc.lookAt(target);
-    vc.near = camera.near; vc.far = camera.far;
     vc.updateMatrixWorld();
+    // Same projection as the main camera but with a nearer far plane (cheaper culling);
+    // the sky is drawn at the far plane in clip space so it still appears.
+    const far0 = camera.far;
+    camera.far = Math.min(far0, this.far || 1600);
+    camera.updateProjectionMatrix();
     vc.projectionMatrix.copy(camera.projectionMatrix);
+    camera.far = far0;
+    camera.updateProjectionMatrix();
 
     this.textureMatrix.set(0.5, 0, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0, 0.5, 0.5, 0, 0, 0, 1);
     this.textureMatrix.multiply(vc.projectionMatrix).multiply(vc.matrixWorldInverse);

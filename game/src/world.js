@@ -8,6 +8,7 @@ import { buildCity } from './city.js';
 import { buildSky, MOON_DIR } from './sky.js';
 import { buildLandmarks } from './landmarks.js';
 import { buildSigns } from './signs.js';
+import { buildJunction } from './junction.js';
 import { PlanarReflection } from './reflection.js';
 import { U, LAMP } from './lighting.js';
 import { LAYER } from './util.js';
@@ -33,6 +34,8 @@ export class World {
     this.scene.add(this.landmarks.group);
     this.signs = buildSigns(this.track);
     this.scene.add(this.signs.group);
+    this.junction = buildJunction(this.track);
+    this.scene.add(this.junction.group);
 
     // Global lights (match the custom shaders' ambient terms; see lighting.js).
     const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
@@ -56,7 +59,7 @@ export class World {
 
     // Dynamic environment for reflective car paint.
     this.envRT = new THREE.WebGLCubeRenderTarget(quality.envSize, { type: THREE.HalfFloatType, generateMipmaps: false });
-    this.cubeCam = new THREE.CubeCamera(0.5, 4500, this.envRT);
+    this.cubeCam = new THREE.CubeCamera(0.5, 2200, this.envRT);
     for (const c of this.cubeCam.children) c.layers.set(LAYER.ENV);
     this.scene.add(this.cubeCam);
     this.scene.environment = this.envRT.texture;
@@ -90,7 +93,10 @@ export class World {
     U.uTime.value = this.time;
     this.sky.material.uniforms.uTime.value = this.time;
     this.landmarks.update(this.time);
-    this.signs.update(this.time);
+    this.signs.update(this.time, this.camS ?? 0);
+    const js = this.camS ?? 0;
+    this.junction.group.visible = js > 4800 && js < 7600;
+    if (this.junction.group.visible) this.junction.update(dt);
 
     // Move the lamp pool to the lamps nearest the focus.
     const s = focus.s;
@@ -127,18 +133,27 @@ export class World {
   prerender(camera, focusPos) {
     const r = this.renderer;
     const q = this.quality;
-    // Environment cube from just above the player car.
-    if (q.envEvery > 0 && (this.envCounter++ % q.envEvery === 0 || !this.envPrimed)) {
+    // Environment cube from just above the player car: a few faces per frame (round robin).
+    if (!this.envPrimed) {
       this.cubeCam.position.copy(focusPos).add(this._v.set(0, 1.2, 0));
       this.cubeCam.update(r, this.scene);
       this.envRT.texture.needsPMREMUpdate = true;
       this.envPrimed = true;
-    } else if (!this.envPrimed) {
-      this.cubeCam.position.copy(focusPos).add(this._v.set(0, 1.5, 0));
-      this.cubeCam.update(r, this.scene);
+      this.envFace = 0;
+    } else if (q.envFaces > 0) {
+      const cc = this.cubeCam;
+      cc.position.copy(focusPos).add(this._v.set(0, 1.2, 0));
+      cc.updateMatrixWorld(true);
+      const prev = r.getRenderTarget();
+      for (let k = 0; k < q.envFaces; k++) {
+        const i = this.envFace++ % 6;
+        r.setRenderTarget(this.envRT, i);
+        r.render(this.scene, cc.children[i]);
+      }
+      r.setRenderTarget(prev);
       this.envRT.texture.needsPMREMUpdate = true;
-      this.envPrimed = true;
     }
+    const c0 = r.info.render.calls;
     // Road reflection: mirror about the deck under the camera.
     const cp = camera.position;
     const pr = this.track.project(cp.x, cp.z, this.camS ?? null);
@@ -147,9 +162,11 @@ export class World {
     const onDeck = Math.abs(pr.d - (-7)) < 20 && cp.y > this.frame.pos.y - 1;
     U.uReflOn.value = this.roadRefl.enabled && onDeck && this.roadRefl.update(r, this.scene, camera, this.frame.pos, this.frame.up) ? 1 : 0;
     // Sea reflection only where the sea is in view.
+    const c1 = r.info.render.calls;
     const nearSea = (pr.s < 4900 || this.waterAlways) && !(pr.s > TUNNEL.s0 + 30 && pr.s < TUNNEL.s1 - 30);
     const gu = this.city.groundUniforms;
     gu.uWaterReflOn.value = this.waterRefl.enabled && nearSea && this.waterRefl.update(r, this.scene, camera, this._v.set(0, 0, 0), this._n.set(0, 1, 0)) ? 1 : 0;
+    this.stats = { env: c0, road: c1 - c0, water: r.info.render.calls - c1 };
     void BRIDGE;
   }
 }
