@@ -70,10 +70,10 @@ html, body { margin: 0; height: 100%; background: #000; overflow: hidden; touch-
 .tbtn { position: absolute; pointer-events: auto; display: flex; align-items: center; justify-content: center; font-family: var(--font-en); color: rgba(255,255,255,.9); background: rgba(255,255,255,.07); border: 2px solid rgba(255,255,255,.28); border-radius: 18px; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); transition: background .08s, transform .08s; }
 .tbtn.on { background: rgba(255,43,58,.45); border-color: #fff; transform: scale(.96); }
 .tbtn.steer { width: 15vh; height: 22vh; bottom: 5vh; font-size: 7vh; }
-.tbtn.left { left: 3vw; }
-.tbtn.right { left: calc(3vw + 17vh); }
-.tbtn.accel { right: 3vw; bottom: 5vh; width: 17vh; height: 30vh; font-size: 3.2vh; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,43,58,.18)); }
-.tbtn.brake { right: calc(3vw + 19vh); bottom: 5vh; width: 15vh; height: 19vh; font-size: 3vh; }
-.tbtn.pause { top: 2.5vh; right: 2vw; width: 7vh; height: 7vh; font-size: 3vh; border-radius: 50%; }
-.tbtn.cam { top: 2.5vh; right: calc(2vw + 9vh); width: 7vh; height: 7vh; font-size: 2vh; border-radius: 50%; }
+.tbtn.left { left: calc(3vw + env(safe-area-inset-left)); }
+.tbtn.right { left: calc(3vw + 17vh + env(safe-area-inset-left)); }
+.tbtn.accel { right: calc(3vw + env(safe-area-inset-right)); bottom: 5vh; width: 17vh; height: 30vh; font-size: 3.2vh; border-radius: 22px; background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,43,58,.18)); }
+.tbtn.brake { right: calc(3vw + 19vh + env(safe-area-inset-right)); bottom: 5vh; width: 15vh; height: 19vh; font-size: 3vh; }
+.tbtn.pause { top: 2.5vh; right: calc(16% + env(safe-area-inset-right)); width: 7vh; height: 7vh; font-size: 3vh; border-radius: 50%; }
+.tbtn.cam { top: 2.5vh; right: calc(16% + 9vh + env(safe-area-inset-right)); width: 7vh; height: 7vh; font-size: 2vh; border-radius: 50%; }
 .tbtn .pedal { width: 70%; height: 80%; border-radius: 10px; background: repeating-linear-gradient(0deg, rgba(255,255,255,.2) 0 6px, rgba(255,255,255,0) 6px 14px); display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8%; }

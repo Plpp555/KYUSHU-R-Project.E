@@ -77,7 +77,7 @@ vec3 brdfLight(vec3 P, vec3 N, vec3 V, vec3 Lp, vec3 col, vec3 albedo, float rou
   vec3 H = normalize(L + V);
   float NoH = max(dot(N, H), 0.0), NoV = max(dot(N, V), 1e-3);
   float a = max(rough*rough, 0.012);   // punctual lights: avoid razor-thin, ultra-bright highlights
-  float F = f0 + (1.0-f0)*pow(1.0 - max(dot(H, V), 0.0), 5.0);
+  float F = f0 + (1.0-f0)*pow(clamp(1.0 - dot(H, V), 0.0, 1.0), 5.0);
   float spec = D_GGX(a, NoH) * V_Smith(a, NoV, NoL) * F;
   return col * NoL * (albedo / PI + spec) / (d2 + 0.6);
 }

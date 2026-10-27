@@ -26,6 +26,14 @@ export class HUD {
   }
 
   resize() {
+    // Safe-area insets (display cutouts) so nothing important sits under a notch.
+    if (!this.probe) {
+      this.probe = document.createElement('div');
+      this.probe.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
+      document.body.appendChild(this.probe);
+    }
+    const cs = getComputedStyle(this.probe);
+    this.safe = { l: parseFloat(cs.paddingLeft) || 0, r: parseFloat(cs.paddingRight) || 0, t: parseFloat(cs.paddingTop) || 0, b: parseFloat(cs.paddingBottom) || 0 };
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     this.dpr = dpr;
     this.w = window.innerWidth; this.h = window.innerHeight;
@@ -46,8 +54,9 @@ export class HUD {
     const g = this.g;
     this.clear();
     if (!this.visible) return;
-    g.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    const W = this.w, H = this.h, u = Math.min(W, H * 1.6) / 100;
+    const sf = this.safe || { l: 0, r: 0, t: 0, b: 0 };
+    g.setTransform(this.dpr, 0, 0, this.dpr, this.dpr * sf.l, this.dpr * sf.t);
+    const W = this.w - sf.l - sf.r, H = this.h - sf.t - sf.b, u = Math.min(W, H * 1.6) / 100;
     this.u = u;
     if (st.showGauges) {
       this.gauges(st, W, H, u);
@@ -152,16 +161,15 @@ export class HUD {
     const g = this.g;
     const x = u * 3, y = u * 3.2;
     g.font = `700 ${u * 1.7}px ${NUM}`; g.fillStyle = '#ffd21a'; g.textAlign = 'left'; g.textBaseline = 'middle';
-    g.fillText('TIME', x, y);
-    const t = Math.max(0, st.timeLeft);
-    const warn = t < 10 && Math.floor(t * 4) % 2 === 0;
+    const free = st.mode === 'free';
+    g.fillText(free ? 'FREE RUN' : 'TIME', x, y);
+    const t = free ? st.elapsed : Math.max(0, st.timeLeft);
+    const warn = !free && t < 10 && Math.floor(t * 4) % 2 === 0;
     const sec = Math.floor(t), cs = Math.floor((t - sec) * 100);
-    this.glowText(String(sec).padStart(2, '0'), x, y + u * 4.2, `900 ${u * 7}px ${NUM}`, warn ? '#ff3b45' : '#ffffff', warn ? '#ff2b3a' : '#ff9a1a', u * 1.2, 'left');
-    g.font = `900 ${u * 3}px ${NUM}`;
-    const w = g.measureText(String(sec).padStart(2, '0')).width;
+    const secText = String(sec).padStart(2, '0');
+    this.glowText(secText, x, y + u * 4.2, `900 ${u * 7}px ${NUM}`, warn ? '#ff3b45' : '#ffffff', warn ? '#ff2b3a' : '#ff9a1a', u * 1.2, 'left');
     g.font = `900 ${u * 7}px ${NUM}`;
-    const w2 = g.measureText(String(sec).padStart(2, '0')).width;
-    void w;
+    const w2 = g.measureText(secText).width;
     this.glowText('.' + String(cs).padStart(2, '0'), x + w2 + u * 0.4, y + u * 5.4, `900 ${u * 3}px ${NUM}`, warn ? '#ff3b45' : '#ffffff', '#ff9a1a', u * 0.6, 'left');
     // Elapsed
     const e = st.elapsed;

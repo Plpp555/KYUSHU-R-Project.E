@@ -1,7 +1,7 @@
 // Small shared helpers: seeded RNG, math, value noise, layers.
 import * as THREE from 'three';
 
-export const LAYER = { MAIN: 0, ENV: 1, REFLECT: 2 };
+export const LAYER = { MAIN: 0, ENV: 1, REFLECT: 2, WATER: 3 };
 
 export function setLayers(obj, ...layers) {
   obj.traverse(o => {

@@ -220,7 +220,7 @@ vec3 sea(vec3 P, vec3 V){
   g += (vec2(vnoise(p * 0.15 + t * 0.2), vnoise(p * 0.15 - t * 0.17 + 5.0)) - 0.5) * 0.06;
   vec3 N = normalize(vec3(-g.x, 1.0, -g.y));
   float NoV = max(dot(N, V), 0.0);
-  float F = 0.02 + 0.98 * pow(1.0 - NoV, 5.0);
+  float F = 0.02 + 0.98 * pow(clamp(1.0 - NoV, 0.0, 1.0), 5.0);
   vec3 refl;
   if (uWaterReflOn > 0.5) {
     vec4 rc = uWaterMat * vec4(P, 1.0);
@@ -306,8 +306,8 @@ void main(){
     vec2 fw = fwidth(g);
     float foot = max(fw.x, fw.y);
     bool ribbon = office && hash12(vec2(seed, 5.0)) > 0.5;
-    float wx = ribbon ? 1.0 : smoothstep(0.14, 0.14 + fw.x, f.x) * smoothstep(0.86, 0.86 - fw.x, f.x);
-    float wy = smoothstep(office ? 0.22 : 0.3, (office ? 0.22 : 0.3) + fw.y, f.y) * smoothstep(0.88, 0.88 - fw.y, f.y);
+    float wx = ribbon ? 1.0 : smoothstep(0.14, 0.14 + fw.x, f.x) * (1.0 - smoothstep(0.86 - fw.x, 0.86, f.x));
+    float wy = smoothstep(office ? 0.22 : 0.3, (office ? 0.22 : 0.3) + fw.y, f.y) * (1.0 - smoothstep(0.88 - fw.y, 0.88, f.y));
     float win = wx * wy * step(0.0, g.y);
     float faceSeed = seed * 13.0 + vFace * 3.7;
     float on;
@@ -318,7 +318,7 @@ void main(){
       float seg = step(0.22, hash12(vec2(floor(g.x / 4.0), id.y + faceSeed)));
       on = floorOn * seg;
       wc = mix(vec3(0.78, 0.9, 1.0), vec3(1.0, 0.94, 0.82), step(0.7, hash12(vec2(id.y, seed))));
-      inten = 1.1 + 0.6 * hash12(vec2(id.y, seed * 2.0));
+      inten = 0.75 + 0.55 * hash12(vec2(id.y, seed * 2.0));
     } else {
       on = step(hash12(id + vec2(faceSeed, 7.0)), lit * (apt ? 0.75 : 1.0));
       float tsel = hash12(id * 0.37 + seed);
@@ -328,7 +328,7 @@ void main(){
       inten *= 0.75 + 0.35 * smoothstep(0.2, 0.9, f.y);              // curtains, ceiling light
     }
     float NoV = max(dot(N, V), 0.0);
-    vec3 glass = mix(vec3(0.008, 0.01, 0.016), vec3(0.04, 0.035, 0.05), pow(1.0 - NoV, 3.0));
+    vec3 glass = mix(vec3(0.008, 0.01, 0.016), vec3(0.04, 0.035, 0.05), pow(clamp(1.0 - NoV, 0.0, 1.0), 3.0));
     vec3 wall = vec3(0.01, 0.0098, 0.0105) * (0.6 + 0.8 * hash12(vec2(seed, 9.0)));
     wall += vec3(0.06, 0.034, 0.016) * exp(-vUv2.y / 9.0);
     vec3 detailed = mix(wall, mix(glass, wc * inten, on), win);
@@ -338,7 +338,7 @@ void main(){
       vec2 cf = vec2(fract(vUv2.x / 4.2) - 0.5, f.y - 0.12);
       float unitOn = step(0.28, hash12(vec2(floor(vUv2.x / 4.2), id.y + seed * 7.0)));
       corridor = exp(-dot(cf * vec2(14.0, 22.0), cf * vec2(14.0, 22.0))) * unitOn * (0.55 + 0.45 * hash12(vec2(id.y, seed)));
-      detailed = mix(wall * 1.5, detailed, 0.3) + vec3(1.0, 0.9, 0.78) * corridor * 1.8 + vec3(0.025, 0.022, 0.018) * smoothstep(0.2, 0.0, abs(f.y - 0.12));
+      detailed = mix(wall * 1.5, detailed, 0.3) + vec3(1.0, 0.9, 0.78) * corridor * 1.8 + vec3(0.025, 0.022, 0.018) * (1.0 - smoothstep(0.0, 0.2, abs(f.y - 0.12)));
     }
     // Ground floor shops.
     float shopId = hash12(vec2(floor(vUv2.x / 7.0), seed));
@@ -382,11 +382,15 @@ function buildBuildings(track, index, isWater, quality, area) {
     for (const [cx, cz, w] of centres) u += w * Math.exp(-((x - cx) ** 2 + (z - cz) ** 2) / (2 * 900 * 900));
     return Math.min(1, u);
   };
+  // Parks / plazas around the landmarks (tower, dome, hotel, port tower, station).
+  const exclusions = [[1720, 330, 170], [2050, 420, 190], [2240, 260, 70], [4520, 330, 60], [7450, -190, 120]]
+    .map(([s, d, r]) => { const p = track.point(s, d); return [p.x, p.z, r]; });
   const list = [];
   const tryPlace = (x, z, far) => {
     if (isWater(x, z)) return;
     index.nearest(x, z, q);
     if (q.s > TUNNEL.s0 - 200 && q.s < TUNNEL.s1 + 150 && Math.abs(q.d + 7) < 350) return; // park hill
+    for (const [ex, ez, er] of exclusions) if ((x - ex) ** 2 + (z - ez) ** 2 < er * er) return;
     const u = urban(x, z);
     const clear = far ? 120 : 34 + (u > 0.6 ? 0 : 10);
     if (q.dist < clear) return;
@@ -452,7 +456,7 @@ function buildBuildings(track, index, isWater, quality, area) {
   mesh.instanceMatrix.needsUpdate = true;
   mesh.computeBoundingSphere();
   mesh.frustumCulled = false;
-  setLayers(mesh, LAYER.MAIN, LAYER.ENV, LAYER.REFLECT);
+  setLayers(mesh, LAYER.MAIN, LAYER.ENV, LAYER.REFLECT, LAYER.WATER);
 
   // Blinking red aviation obstruction lights.
   const ag = new THREE.BufferGeometry();
@@ -475,7 +479,7 @@ function buildBuildings(track, index, isWater, quality, area) {
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
   aviation.frustumCulled = false;
-  setLayers(aviation, LAYER.MAIN, LAYER.REFLECT);
+  setLayers(aviation, LAYER.MAIN, LAYER.REFLECT, LAYER.WATER);
   return { mesh, aviation, count: n };
 }
 

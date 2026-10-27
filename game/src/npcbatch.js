@@ -108,7 +108,7 @@ void main(){
   vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
   vec3 p = aGlow.xyz + (right * position.x * aCol.a + up * position.y) * aGlow.w;
   vec4 mv = viewMatrix * vec4(p, 1.0);
-  float dist = -mv.z;
+  float dist = max(-mv.z, 0.0);
   vFog = exp(-pow(uFogDensity * dist, 2.0));
   vCol = aCol.rgb;
   // Keep distant lamps at least ~1.5px so they read as points of light.
@@ -116,25 +116,24 @@ void main(){
 }`;
 const GLOW_FRAG = /* glsl */`
 uniform sampler2D uMap; varying vec2 vUv; varying vec3 vCol; varying float vFog;
-void main(){ float a = texture2D(uMap, vUv).r; gl_FragColor = vec4(vCol * a * vFog, 1.0); }`;
+void main(){ float a = texture2D(uMap, vUv).a; gl_FragColor = vec4(vCol * a * vFog, 1.0); }`;
 
 /** Batched billboard glows (one draw per texture). */
 export class GlowBatch {
   constructor(max, texture, layers = [LAYER.MAIN, LAYER.REFLECT]) {
     this.max = max;
-    const g = new THREE.InstancedBufferGeometry();
-    const q = new THREE.PlaneGeometry(1, 1);
-    g.index = q.index; g.attributes.position = q.attributes.position; g.attributes.uv = q.attributes.uv;
+    // InstancedMesh (instance matrices unused) so per-instance attributes bind reliably.
+    const g = new THREE.PlaneGeometry(1, 1);
     this.pos = new Float32Array(max * 4); this.col = new Float32Array(max * 4);
     g.setAttribute('aGlow', new THREE.InstancedBufferAttribute(this.pos, 4).setUsage(THREE.DynamicDrawUsage));
     g.setAttribute('aCol', new THREE.InstancedBufferAttribute(this.col, 4).setUsage(THREE.DynamicDrawUsage));
-    g.instanceCount = 0;
     this.geo = g;
-    this.mesh = new THREE.Mesh(g, new THREE.ShaderMaterial({
+    this.mesh = new THREE.InstancedMesh(g, new THREE.ShaderMaterial({
       uniforms: { uMap: { value: texture }, uFogDensity: U.uFogDensity },
       vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-    }));
+    }), max);
+    this.mesh.count = 0;
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = 5;
     setLayers(this.mesh, ...layers);
@@ -148,7 +147,7 @@ export class GlowBatch {
     this.col[i] = r; this.col[i + 1] = g; this.col[i + 2] = b; this.col[i + 3] = stretch;
   }
   end() {
-    this.geo.instanceCount = this.n;
+    this.mesh.count = this.n;
     this.geo.attributes.aGlow.needsUpdate = true;
     this.geo.attributes.aCol.needsUpdate = true;
   }
@@ -219,15 +218,15 @@ export class TrafficRenderer {
       const t = meta.lights.tail[k];
       v.set(t[0], t[1], t[2] - 0.05).applyMatrix4(c.matrix);
       const blinkOn = c.blink > 0 && ((k === 1) === c.blinkRight) && (c.blink * 2.5) % 1 < 0.5;
-      const br = 1.4 + c.brake * 5.5;
-      if (blinkOn) this.glow.add(v.x, v.y, v.z, 0.9, 4.0, 1.6, 0.08);
-      else this.glow.add(v.x, v.y, v.z, 0.6 + c.brake * 0.5, br * (0.35 + 0.65 * back), 0.045 * br, 0.03 * br);
+      const br = 1.3 + c.brake * 3.0;
+      if (blinkOn) this.glow.add(v.x, v.y, v.z, 0.75, 3.2, 1.3, 0.06);
+      else this.glow.add(v.x, v.y, v.z, 0.5 + c.brake * 0.2, br * (0.35 + 0.65 * back), 0.045 * br, 0.03 * br);
     }
     if (facing > 0.01) {
       for (const h of meta.lights.head) {
         v.set(h[0], h[1], h[2] + 0.1).applyMatrix4(c.matrix);
         this.glow.add(v.x, v.y, v.z, 0.95 * facing, 2.6 * facing, 2.5 * facing, 2.2 * facing);
-        this.streak.add(v.x, v.y, v.z, 0.32 * facing, 1.1 * facing, 1.2 * facing, 1.4 * facing, 14 * facing);
+        this.streak.add(v.x, v.y, v.z, 0.26 * facing, 0.55 * facing, 0.6 * facing, 0.7 * facing, 9 * facing);
       }
     }
   }

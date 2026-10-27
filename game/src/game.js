@@ -93,6 +93,7 @@ export class Game {
   settingsMenu(back) {
     const s = this.settings;
     const prev = this.state;
+    this.pausedSettings = prev === 'pause';
     this.setState('settings');
     const save = () => localStorage.setItem('kr_settings', JSON.stringify(s));
     const cycle = (arr, cur, dir) => arr[(arr.indexOf(cur) + dir + arr.length) % arr.length];
@@ -101,17 +102,15 @@ export class Game {
       { label: 'STEERING', jp: '操作', value: s.steering, action: (dir) => { s.steering = cycle(['TOUCH', 'TILT'], s.steering, dir); this.input.mode = s.steering.toLowerCase(); this.ui.setValue(1, s.steering); save(); } },
       { label: 'AUTO ACCEL', jp: 'オートアクセル', value: s.autoAccel ? 'ON' : 'OFF', action: () => { s.autoAccel = !s.autoAccel; this.input.autoAccel = s.autoAccel; this.ui.setValue(2, s.autoAccel ? 'ON' : 'OFF'); save(); } },
       { label: 'CAMERA', jp: '視点', value: s.camera, action: (dir) => { s.camera = cycle(['CHASE', 'NEAR', 'BUMPER'], s.camera, dir); this.rig.setMode(s.camera); this.ui.setValue(3, s.camera); save(); } },
-      { label: 'ROAD', jp: '路面', value: s.road, action: (dir) => { s.road = cycle(['WET', 'DAMP', 'DRY'], s.road, dir); this.applyRoad(); this.ui.setValue(4, s.road); save(); } },
+      { label: 'WEATHER', jp: '天候・路面', value: s.road, action: (dir) => { s.road = cycle(['WET', 'RAIN', 'DAMP', 'DRY'], s.road, dir); this.applyRoad(); this.ui.setValue(4, s.road); save(); } },
       { label: 'BGM', jp: '音楽', value: s.bgm ? 'ON' : 'OFF', action: () => { s.bgm = !s.bgm; this.audio.setMusic(s.bgm); this.ui.setValue(5, s.bgm ? 'ON' : 'OFF'); save(); } },
-      { label: 'APPLY & BACK', jp: '戻る', action: () => { save(); if (s.quality !== this.quality.label) location.reload(); else { this.state = prev; back(); } } },
+      { label: 'DYNAMIC RES', jp: '解像度自動調整', value: s.dynamicRes ? 'ON' : 'OFF', action: () => { s.dynamicRes = !s.dynamicRes; this.ui.setValue(6, s.dynamicRes ? 'ON' : 'OFF'); save(); } },
+      { label: 'APPLY & BACK', jp: '戻る', action: () => { save(); if (s.quality !== this.quality.label) location.reload(); else { this.state = prev; this.pausedSettings = false; back(); } } },
     ];
-    this.ui.menu('SETTINGS', items, { onBack: () => items[6].action(), hint: '←→ CHANGE   * = RESTART' });
+    this.ui.menu('SETTINGS', items, { onBack: () => items[7].action(), hint: '←→ CHANGE   * = RESTART' });
   }
 
-  applyRoad() {
-    const r = this.settings.road;
-    U.uWet.value = r === 'WET' ? 0.85 : r === 'DAMP' ? 0.45 : 0.0;
-  }
+  applyRoad() { this.world.setWeather(this.settings.road); }
 
   startRace(mode) {
     this.mode = mode;
@@ -180,7 +179,8 @@ export class Game {
 
     switch (st) {
       case 'title': this.updateAttract(dt, true); if (this.input.anyPress) { this.audio.init(); this.applyAudio(); this.audio.confirm(); this.mainMenu(); } break;
-      case 'menu': case 'settings': this.updateAttract(dt, false); break;
+      case 'menu': this.updateAttract(dt, false); break;
+      case 'settings': if (!this.pausedSettings) this.updateAttract(dt, false); break;
       case 'intro': this.updateIntro(dt); break;
       case 'countdown': this.updateCountdown(dt, inp); break;
       case 'race': this.updateRace(dt, inp); break;
@@ -189,7 +189,7 @@ export class Game {
       case 'continue': this.updateContinue(dt); break;
       case 'pause': this.ui.handle(this.input); break;
     }
-    if (st !== 'pause') {
+    if (st !== 'pause' && !(st === 'settings' && this.pausedSettings)) {
       this.fxp.update(dt);
       this.world.update(dt, { s: this.player.s, pos: this.player.pos });
       this.updateLights();
@@ -647,7 +647,7 @@ export class Game {
 
 export function defaultSettings() {
   const saved = JSON.parse(localStorage.getItem('kr_settings') || '{}');
-  return Object.assign({ quality: 'ULTRA', steering: 'TOUCH', autoAccel: false, camera: 'CHASE', road: 'WET', bgm: true }, saved);
+  return Object.assign({ quality: 'ULTRA', steering: 'TOUCH', autoAccel: false, camera: 'CHASE', road: 'WET', bgm: true, dynamicRes: true }, saved);
 }
 
 export { PRESETS, LANES, setLayers, LAYER };

@@ -63,7 +63,7 @@ void main(){
 
   // Wheel paths: polished, slightly rutted (holds water).
   float lc = dd - 3.5 * floor(dd / 3.5 + 0.5);
-  float wheel = smoothstep(0.55, 0.0, abs(abs(lc) - 0.85));
+  float wheel = 1.0 - smoothstep(0.0, 0.55, abs(abs(lc) - 0.85));
 
   // Markings: solid edge lines, 8m/12m dashed lane lines.
   float m = lineMask(dd - 5.3, 0.2) + lineMask(dd + 5.3, 0.2);
@@ -91,11 +91,11 @@ void main(){
   float H = (n1 * 0.004 * detail + n2 * 0.006) * (1.0 - puddle * uWet * 0.95) + m * 0.0015;
   // Rain ripples on the puddles.
   if (uRain > 0.01) {
-    vec2 rp = vec2(d, s) * 1.3;
+    vec2 rp = vec2(d, s) * 3.2;
     vec2 cell = floor(rp); vec2 fr = fract(rp) - 0.5;
-    float ph = fract(uTime * 1.3 + hash12(cell));
-    float ring = sin((length(fr - (hash22(cell) - 0.5) * 0.6) - ph * 0.5) * 60.0) * (1.0 - ph) * smoothstep(0.5, 0.0, length(fr));
-    H += ring * 0.0025 * uRain * puddle * detail;
+    float ph = fract(uTime * 1.6 + hash12(cell));
+    float ring = sin((length(fr - (hash22(cell) - 0.5) * 0.5) - ph * 0.45) * 70.0) * (1.0 - ph) * (1.0 - smoothstep(0.0, 0.5, length(fr)));
+    H += ring * 0.0009 * uRain * (0.4 + 0.6 * puddle) * detail;
   }
   N = perturbN(vWorld, N, H);
 
@@ -110,7 +110,7 @@ void main(){
   col += m * headLit * vec3(1.0, 0.96, 0.88) * 2.2;
 
   float NoV = max(dot(N, V), 0.0);
-  float F = 0.02 + 0.98 * pow(1.0 - NoV, 5.0);
+  float F = 0.02 + 0.98 * pow(clamp(1.0 - NoV, 0.0, 1.0), 5.0);
   float reflAmt = F * wet * mix(0.6, 1.0, puddle) * (1.0 - rough * 0.6);
   if (uReflOn > 0.5) {
     vec4 rc = uReflMat * vec4(vWorld, 1.0);
@@ -153,12 +153,10 @@ void main(){
   vec3 emit = vec3(0.0);
   if (uType == 1) {
     // Tunnel: glossy tiles up to 3.2m, painted concrete above.
-    vec2 tp = vec2(s / 0.3, h / 0.15);
-    float grout = max(lineMask(fract(tp.x) - 0.5, 0.06) * 0.0, 0.0);
     vec2 g = abs(fract(vec2(s / 0.6, h / 0.3)) - 0.5);
     float gr = 1.0 - smoothstep(0.44, 0.48, max(g.x, g.y));
     bool tiles = h < 3.2;
-    float dirt = fbm3(vec2(s * 0.08, h * 0.6)) * 0.5 + smoothstep(1.0, 0.0, h) * 0.4;
+    float dirt = fbm3(vec2(s * 0.08, h * 0.6)) * 0.5 + (1.0 - smoothstep(0.0, 1.0, h)) * 0.4;
     albedo = tiles ? mix(vec3(0.55, 0.56, 0.55), vec3(0.3, 0.3, 0.28), dirt) * mix(0.6, 1.0, gr) : vec3(0.08, 0.08, 0.085) * (0.8 + 0.4 * fbm3(vec2(s, h) * 0.5));
     rough = tiles ? mix(0.5, 0.18, gr) : 0.9;
     // Coloured guide stripe at eye level.
@@ -179,13 +177,13 @@ void main(){
     albedo = mix(albedo, vec3(0.3), smoothstep(2.82, 2.88, h));
   } else {
     float streaks = fbm3(vec2(s * 0.7, h * 0.12)) * 0.6 + fbm3(vec2(s * 0.05, h)) * 0.4;
-    float grime = smoothstep(0.6, -0.3, h) * 0.5;
+    float grime = (1.0 - smoothstep(-0.3, 0.6, h)) * 0.5;
     albedo = vec3(0.17, 0.17, 0.165) * (0.55 + 0.7 * streaks) * (1.0 - grime);
     if (uType == 3) albedo *= 0.65;
     rough = 0.88;
     H = vnoise(vec2(s, h) * 9.0) * 0.003 * detail;
     // Wet lower part reflects a bit.
-    rough = mix(rough, 0.45, uWet * smoothstep(0.35, 0.0, h) * (uType == 3 ? 0.0 : 1.0));
+    rough = mix(rough, 0.45, uWet * (1.0 - smoothstep(0.0, 0.35, h)) * (uType == 3 ? 0.0 : 1.0));
   }
   N = perturbN(vWorld, N, H);
   vec3 V = normalize(cameraPosition - vWorld);

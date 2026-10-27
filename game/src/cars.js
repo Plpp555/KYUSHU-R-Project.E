@@ -90,7 +90,7 @@ export async function loadCar(id, onProgress) {
     } else if (def.paint.test(name)) {
       const p = m.isMeshPhysicalMaterial ? m : THREE.MeshStandardMaterial.prototype.copy.call(new THREE.MeshPhysicalMaterial(), m);
       Object.assign(p, def.paintTune);
-      p.envMapIntensity = 1.25;
+      p.envMapIntensity = 1.0;
       o.material = p;
       paints.push(o);
     } else {
@@ -238,8 +238,8 @@ export class CarVisual {
     const e = 2.2 + b * 9;
     for (const m of this.tailMats) m.emissiveIntensity = e;
     for (const s of this.tailGlows) {
-      s.material.color.setRGB(1, 0.03, 0.02).multiplyScalar(1.6 + b * 6);
-      s.scale.setScalar(0.6 + b * 0.5);
+      s.material.color.setRGB(1, 0.03, 0.02).multiplyScalar(1.4 + b * 3.2);
+      s.scale.setScalar(0.5 + b * 0.22);
     }
   }
 

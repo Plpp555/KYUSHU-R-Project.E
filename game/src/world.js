@@ -9,6 +9,7 @@ import { buildSky, MOON_DIR } from './sky.js';
 import { buildLandmarks } from './landmarks.js';
 import { buildSigns } from './signs.js';
 import { buildJunction } from './junction.js';
+import { Rain } from './rain.js';
 import { PlanarReflection } from './reflection.js';
 import { U, LAMP } from './lighting.js';
 import { LAYER } from './util.js';
@@ -36,6 +37,8 @@ export class World {
     this.scene.add(this.signs.group);
     this.junction = buildJunction(this.track);
     this.scene.add(this.junction.group);
+    this.rain = new Rain(quality.label === 'LOW' ? 3000 : 7000);
+    this.scene.add(this.rain.mesh);
 
     // Global lights (match the custom shaders' ambient terms; see lighting.js).
     const hemi = new THREE.HemisphereLight(0xffffff, 0xffffff, 1);
@@ -73,7 +76,8 @@ export class World {
     U.uReflMat.value = this.roadRefl.textureMatrix;
     this.waterRefl = new PlanarReflection(quality.waterReflection || 0.35);
     this.waterRefl.enabled = quality.waterReflection > 0;
-    this.waterRefl.camera.layers.set(LAYER.REFLECT);
+    this.waterRefl.camera.layers.set(LAYER.WATER);
+    this.waterRefl.far = 3000;
     this.city.groundUniforms.uWaterRefl.value = this.waterRefl.rt.texture;
     this.city.groundUniforms.uWaterMat.value = this.waterRefl.textureMatrix;
 
@@ -90,6 +94,7 @@ export class World {
   /** focus = {s, pos} of the player (or camera target). */
   update(dt, focus) {
     this.time += dt;
+    this.lastDt = dt;
     U.uTime.value = this.time;
     this.sky.material.uniforms.uTime.value = this.time;
     this.landmarks.update(this.time);
@@ -130,8 +135,20 @@ export class World {
   }
 
   /** Renders reflections and the environment cube before the main frame. */
+  setWeather(w) {
+    const rain = w === 'RAIN';
+    U.uWet.value = rain ? 1.0 : w === 'WET' ? 0.85 : w === 'DAMP' ? 0.45 : 0.0;
+    U.uRain.value = rain ? 1 : 0;
+    U.uFogDensity.value = rain ? 0.0022 : 0.0016;
+    this.scene.fog.density = U.uFogDensity.value;
+    this.sky.material.uniforms.uCloud.value = rain ? 1.0 : 0.65;
+    this.sky.material.uniforms.uMoonVis.value = rain ? 0 : 1;
+    this.rain.setIntensity(rain ? 1 : 0);
+  }
+
   prerender(camera, focusPos) {
     const r = this.renderer;
+    this.rain.update(this.lastDt || 0, camera);
     const q = this.quality;
     // Environment cube from just above the player car: a few faces per frame (round robin).
     if (!this.envPrimed) {

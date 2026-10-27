@@ -192,7 +192,7 @@ export function buildTrack(track) {
   group.add(instanced(poleGeo, metal, lampMats, ALL));
   group.add(instanced(housingGeo, new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.5, metalness: 0.6 }), lampMats, ALL));
   const lensMat = new THREE.MeshBasicMaterial({ color: LAMP.color.clone().multiplyScalar(26) });
-  group.add(instanced(lensGeo, lensMat, lampMats, ALL));
+  group.add(instanced(lensGeo, lensMat, lampMats, [...ALL, LAYER.WATER]));
   group.add(buildLightCones(track, lampS));
   group.userData.lampS = lampS;
 
@@ -291,7 +291,7 @@ function buildLightCones(track, lampS) {
       uniform vec3 uColor; varying float vH; varying vec3 vN; varying vec3 vV; varying float vDist;
       void main(){
         float edge = abs(dot(normalize(vN), normalize(vV)));
-        float a = pow(edge, 1.5) * pow(vH, 1.4) * smoothstep(0.0, 0.25, vH);
+        float a = pow(edge, 1.5) * pow(clamp(vH, 0.0, 1.0), 1.4) * smoothstep(0.0, 0.25, vH);
         a *= smoothstep(4.0, 14.0, vDist) * exp(-vDist * 0.004);
         gl_FragColor = vec4(uColor * a, 1.0);
       }`,
@@ -392,6 +392,6 @@ function buildBridge(track) {
     void base;
   }
   g.add(new THREE.Mesh(mergeGeometries(cableGeos), cableMat));
-  setLayers(g, LAYER.MAIN, LAYER.ENV, LAYER.REFLECT);
+  setLayers(g, LAYER.MAIN, LAYER.ENV, LAYER.REFLECT, LAYER.WATER);
   return g;
 }

@@ -64,10 +64,11 @@ async function boot() {
   const game = new Game({ renderer, world, fx, camera, quality, settings, templates, audio, input, hud, ui });
   game.applyRoad();
 
+  let resScale = 1;
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     const dpr = window.devicePixelRatio || 1;
-    const pr = Math.min(quality.maxPixelRatio, dpr, Math.max(1, quality.targetHeight / h));
+    const pr = Math.max(0.5, Math.min(quality.maxPixelRatio, dpr, Math.max(1, quality.targetHeight / h)) * resScale);
     renderer.setPixelRatio(pr);
     renderer.setSize(w, h, false);
     fx.setSize(w, h);
@@ -121,8 +122,19 @@ async function boot() {
   let frames = 0;
   const fixedDt = params.has('dt') ? +params.get('dt') : 0;
   const noRender = params.has('norender');
+  // Dynamic resolution: effects stay on, only the render scale adapts to hold ~40+ fps.
+  let ema = 1 / 60, slowT = 0, fastT = 0;
+  function adaptResolution(rawDt) {
+    if (!settings.dynamicRes || fixedDt) return;
+    ema += (Math.min(rawDt, 0.2) - ema) * 0.05;
+    if (ema > 1 / 38) { slowT += rawDt; fastT = 0; } else if (ema < 1 / 56) { fastT += rawDt; slowT = 0; } else { slowT = fastT = 0; }
+    if (slowT > 1.5 && resScale > 0.6) { resScale = Math.max(0.6, resScale - 0.1); slowT = 0; resize(); }
+    if (fastT > 5 && resScale < 1) { resScale = Math.min(1, resScale + 0.05); fastT = 0; resize(); }
+  }
   function loop(now) {
-    let dt = Math.min(0.05, (now - last) / 1000);
+    const rawDt = (now - last) / 1000;
+    adaptResolution(rawDt);
+    let dt = Math.min(0.05, rawDt);
     if (fixedDt) dt = fixedDt;
     last = now;
     renderer.info.autoReset = false;

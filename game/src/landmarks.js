@@ -6,7 +6,7 @@ import { GLSL_NOISE, LAYER, setLayers, canvasTexture } from './util.js';
 import { U } from './lighting.js';
 import { buildingMaterial } from './city.js';
 
-const ALL = [LAYER.MAIN, LAYER.ENV, LAYER.REFLECT];
+const ALL = [LAYER.MAIN, LAYER.ENV, LAYER.REFLECT, LAYER.WATER];
 
 function groundPoint(track, s, d) {
   const p = track.point(s, d);
@@ -48,7 +48,7 @@ function fukuokaTower(pos, facing) {
         // Half-mirror glass reflecting the night sky.
         vec3 R = reflect(-V, N);
         vec3 sky = mix(vec3(0.09, 0.055, 0.07), vec3(0.008, 0.01, 0.03), clamp(R.y * 2.5, 0.0, 1.0));
-        float F = 0.15 + 0.85 * pow(1.0 - max(dot(N, V), 0.0), 4.0);
+        float F = 0.15 + 0.85 * pow(clamp(1.0 - dot(N, V), 0.0, 1.0), 4.0);
         // LED illumination (Halloween: orange & purple bands sweeping upward).
         float h = vH;
         float grid = step(0.4, fract(h / 1.6)) * step(0.15, fract((vW.x + vW.z) / 1.4));
@@ -99,12 +99,12 @@ function dome(pos) {
         float panels = step(0.06, fract(ang * 48.0 / 6.2831)) * step(0.05, fract(vL.y / 7.0));
         vec3 R = reflect(-V, N);
         vec3 sky = mix(vec3(0.16, 0.1, 0.11), vec3(0.015, 0.02, 0.045), clamp(R.y * 2.0, 0.0, 1.0));
-        float F = 0.3 + 0.7 * pow(1.0 - max(dot(N, V), 0.0), 3.0);
+        float F = 0.3 + 0.7 * pow(clamp(1.0 - dot(N, V), 0.0, 1.0), 3.0);
         vec3 col = sky * F * mix(0.6, 1.0, panels);
         // Ring lights at the eaves and the base.
         float y = vL.y;
-        col += vec3(0.75, 0.85, 1.0) * smoothstep(1.5, 0.0, abs(y - 10.0)) * 2.4;
-        col += vec3(1.0, 0.8, 0.55) * smoothstep(0.8, 0.0, abs(y - 3.0)) * 1.8 * step(0.5, fract(ang * 90.0 / 6.2831));
+        col += vec3(0.75, 0.85, 1.0) * (1.0 - smoothstep(0.0, 1.5, abs(y - 10.0))) * 2.4;
+        col += vec3(1.0, 0.8, 0.55) * (1.0 - smoothstep(0.0, 0.8, abs(y - 3.0))) * 1.8 * step(0.5, fract(ang * 90.0 / 6.2831));
         // Roof seams glow faintly.
         col += vec3(0.2, 0.25, 0.35) * (1.0 - panels) * 0.5;
         float dist = length(cameraPosition - vW);
@@ -206,7 +206,7 @@ export function buildLandmarks(track) {
   const updaters = [];
 
   // 福岡タワー (seaside, north of the course).
-  const tower = fukuokaTower(groundPoint(track, 1380, 430), heading(1380) + 0.4);
+  const tower = fukuokaTower(groundPoint(track, 1720, 330), heading(1720) + 0.4);
   group.add(tower);
   updaters.push(t => { tower.userData.blink.color.setScalar(0).setRGB(1, 0.05, 0.03).multiplyScalar((t % 1.5) < 0.6 ? 14 : 1.5); });
 
@@ -223,7 +223,7 @@ export function buildLandmarks(track) {
 
   // 百道 tower blocks around the tower (TNC etc.).
   for (let i = 0; i < 6; i++) {
-    const p = groundPoint(track, 1000 + i * 140, 250 + (i % 2) * 60);
+    const p = groundPoint(track, 1150 + i * 120, 170 + (i % 2) * 50);
     group.add(towerBuilding(p, heading(1000 + i * 140), 40 + i * 3, 32, 70 + (i * 37) % 60, 10 + i, 0.45, 0.7));
   }
 
