@@ -6,6 +6,7 @@
 // Car headlights / tail lights are fed in as small uniform arrays every frame.
 import * as THREE from 'three';
 import { TUNNEL } from './course.js';
+import { MEDIAN_D, ONCOMING_D } from './track.js';
 import { GLSL_NOISE } from './util.js';
 
 export const MAX_SPOTS = 6;
@@ -24,6 +25,8 @@ export const LAMP = {
   tunnelHeight: 5.3,
   tunnelColor: new THREE.Color(1.0, 0.52, 0.16),
   tunnelIntensity: 85,
+  // Flood masts in front of each tunnel portal (s offset outwards, d, height).
+  mast: { back: 12, rows: [10.5, -25], height: 14, color: new THREE.Color(1.0, 0.88, 0.72), intensity: 300 },
 };
 
 const vec3s = n => Array.from({ length: n }, () => new THREE.Vector3());
@@ -43,6 +46,7 @@ export const U = {
   uLampCol: { value: LAMP.color.clone().multiplyScalar(LAMP.intensity) },
   uTunnel: { value: new THREE.Vector2(TUNNEL.s0, TUNNEL.s1) },
   uTunnelCol: { value: LAMP.tunnelColor.clone().multiplyScalar(LAMP.tunnelIntensity) },
+  uMastCol: { value: LAMP.mast.color.clone().multiplyScalar(LAMP.mast.intensity) },
   uSpotPos: { value: vec3s(MAX_SPOTS) },
   uSpotDir: { value: vec3s(MAX_SPOTS) },
   uSpotCol: { value: vec3s(MAX_SPOTS) },
@@ -61,7 +65,7 @@ uniform vec3 uFogColor; uniform float uFogDensity;
 uniform float uWet; uniform float uRain;
 uniform vec3 uSkyAmb; uniform vec3 uGroundAmb;
 uniform float uLampSpacing; uniform float uLampOffset; uniform vec2 uLampRows; uniform float uLampH; uniform vec3 uLampCol;
-uniform vec2 uTunnel; uniform vec3 uTunnelCol;
+uniform vec2 uTunnel; uniform vec3 uTunnelCol; uniform vec3 uMastCol;
 uniform vec3 uSpotPos[${MAX_SPOTS}]; uniform vec3 uSpotDir[${MAX_SPOTS}]; uniform vec3 uSpotCol[${MAX_SPOTS}];
 uniform vec3 uPtPos[${MAX_POINTS}]; uniform vec3 uPtCol[${MAX_POINTS}];
 ${GLSL_NOISE}
@@ -85,16 +89,20 @@ vec3 brdfLight(vec3 P, vec3 N, vec3 V, vec3 Lp, vec3 col, vec3 albedo, float rou
 // Street lamps + tunnel lamps around (s,d,h) in the local track frame (F,L,Up).
 vec3 trackLamps(vec3 P, vec3 N, vec3 V, vec3 albedo, float rough, float f0, float s, float d, float h, vec3 F, vec3 L, vec3 Up){
   vec3 sum = vec3(0.0);
-  bool tunnel = s > uTunnel.x && s < uTunnel.y;
+  bool tunnel = s > uTunnel.x + 0.3 && s < uTunnel.y - 0.3;
   if (tunnel) {
     float sp = 6.0;
     float base = floor(s / sp + 0.5) * sp;
+    // Twin tubes: the oncoming carriageway has its own lamp rows.
+    float dc = d < ${MEDIAN_D.toFixed(2)} ? ${ONCOMING_D.toFixed(2)} : 0.0;
+    // Entrance (threshold) zone is lit much brighter, the exit zone a little.
+    float ent = 1.0 + 1.6 * exp(-(s - uTunnel.x) / 45.0) + 0.6 * exp(-(uTunnel.y - s) / 30.0);
     for (int k = -2; k <= 2; k++) {
       float sk = base + float(k) * sp;
       for (int r = 0; r < 2; r++) {
-        float dl = r == 0 ? 4.6 : -4.6;
+        float dl = dc + (r == 0 ? 4.6 : -4.6);
         vec3 Lp = P + F*(sk - s) + L*(dl - d) + Up*(5.3 - h);
-        sum += brdfLight(P, N, V, Lp, uTunnelCol, albedo, rough, f0);
+        sum += brdfLight(P, N, V, Lp, uTunnelCol * ent, albedo, rough, f0);
       }
     }
   } else {
@@ -110,6 +118,18 @@ vec3 trackLamps(vec3 P, vec3 N, vec3 V, vec3 albedo, float rough, float f0, floa
         // Cut-off luminaire: mostly downward, soft wide spread.
         float distrib = 0.1 + 0.9 * pow(clamp(dot(Ld, Up), 0.0, 1.0), 3.0);
         sum += brdfLight(P, N, V, P + Lv, uLampCol * distrib, albedo, rough, f0);
+      }
+    }
+    // Flood masts lighting the portal headwalls and the cutting.
+    bool entr = abs(s - uTunnel.x) < abs(s - uTunnel.y);
+    float sm = entr ? uTunnel.x - ${LAMP.mast.back.toFixed(1)} : uTunnel.y + ${LAMP.mast.back.toFixed(1)};
+    if (abs(s - sm) < 110.0) {
+      for (int r = 0; r < 2; r++) {
+        float dl = r == 0 ? ${LAMP.mast.rows[0].toFixed(2)} : ${LAMP.mast.rows[1].toFixed(2)};
+        vec3 Lv = F*(sm - s) + L*(dl - d) + Up*(${LAMP.mast.height.toFixed(1)} - h);
+        // Aimed at the portal: brighter towards the tunnel side.
+        float aim = 0.35 + 0.65 * smoothstep(-0.2, 0.8, dot(normalize(-Lv), F) * (entr ? 1.0 : -1.0));
+        sum += brdfLight(P, N, V, P + Lv, uMastCol * aim, albedo, rough, f0);
       }
     }
   }

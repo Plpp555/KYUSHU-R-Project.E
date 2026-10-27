@@ -135,7 +135,7 @@ void main(){
   gl_FragColor = vec4(min(col, vec3(64.0)), 1.0);
 }`;
 
-// Surface types: 0 concrete parapet, 1 tunnel, 2 sound wall, 3 deck underside/fascia, 4 median barrier
+// Surface types: 0 concrete parapet, 1 tunnel, 2 sound wall, 3 deck underside/fascia, 4 median barrier, 5 portal
 const SURF_FRAG = /* glsl */`
 ${GLSL_TRACK_LIGHT}
 ${BUMP}
@@ -175,6 +175,16 @@ void main(){
     H = rib * 0.0012 * detail * (1.0 - post);
     // Top lip highlight
     albedo = mix(albedo, vec3(0.3), smoothstep(2.82, 2.88, h));
+  } else if (uType == 5) {
+    // Tunnel portal headwall / wing walls: board-formed concrete, panel joints, rain streaks.
+    float u = d + s;
+    float course = lineMask(fract((h + 2.6) / 0.9) - 0.5, 0.035);
+    float joint = lineMask(fract(u / 6.0) - 0.5, 0.012);
+    float streak = fbm3(vec2(u * 0.55, h * 0.07)) * 0.65 + fbm3(vec2(u * 0.08, h * 0.5)) * 0.35;
+    albedo = vec3(0.33, 0.325, 0.31) * (0.6 + 0.55 * streak) * (1.0 - 0.3 * max(course, joint * 1.6));
+    albedo *= 1.0 - 0.4 * (1.0 - smoothstep(-2.5, 1.2, h));
+    rough = mix(0.92, 0.5, uWet * (1.0 - smoothstep(-2.0, 0.6, h)));
+    H = -(course + joint) * 0.0016 * detail + vnoise(vec2(u, h) * 7.0) * 0.0018 * detail;
   } else {
     float streaks = fbm3(vec2(s * 0.7, h * 0.12)) * 0.6 + fbm3(vec2(s * 0.05, h)) * 0.4;
     float grime = (1.0 - smoothstep(-0.3, 0.6, h)) * 0.5;
@@ -214,7 +224,7 @@ export function makeSurfaceMaterial(type) {
     uniforms: { ...U, uType: { value: type } },
     vertexShader: VERT,
     fragmentShader: SURF_FRAG,
-    side: type === 1 || type === 2 ? THREE.DoubleSide : THREE.FrontSide,
+    side: type === 1 || type === 2 || type === 5 ? THREE.DoubleSide : THREE.FrontSide,
   });
   surfCache[type] = m;
   return m;

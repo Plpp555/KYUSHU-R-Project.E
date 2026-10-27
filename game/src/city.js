@@ -3,7 +3,7 @@
 // the 西公園 hill over the tunnel, and rooftop aviation lights.
 import * as THREE from 'three';
 import { GLSL_NOISE, LAYER, setLayers, mulberry32, clamp, fbm } from './util.js';
-import { TUNNEL } from './course.js';
+import { TUNNEL, PORTAL } from './course.js';
 import { MOON_DIR } from './sky.js';
 import { U } from './lighting.js';
 
@@ -490,10 +490,13 @@ function buildBuildings(track, index, isWater, quality, area) {
 function buildHill(track, index) {
   const mid = (TUNNEL.s0 + TUNNEL.s1) / 2;
   const c = track.point(mid, -7);
-  const size = 1300, seg = 110;
+  const size = 1300, seg = 220;
   const geo = new THREE.PlaneGeometry(size, size, seg, seg).rotateX(-Math.PI / 2).translate(c.x, 0, c.z);
   const pos = geo.attributes.position;
   const q = {};
+  const pc = (PORTAL.dL + PORTAL.dR) / 2, phw = (PORTAL.dL - PORTAL.dR) / 2;
+  // Per vertex: 1 = inside the cutting (kept below the deck), 0 = hillside; near = close to a portal.
+  const cutV = new Uint8Array(pos.count), nearV = new Uint8Array(pos.count);
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     index.nearest(x, z, q);
@@ -502,9 +505,30 @@ function buildHill(track, index) {
     const along = q.s < TUNNEL.s0 ? TUNNEL.s0 - q.s : q.s > TUNNEL.s1 ? q.s - TUNNEL.s1 : 0;
     let h = (deck + 13) * Math.exp(-(ad * ad) / (2 * 260 * 260)) * Math.exp(-(along * along) / (2 * 120 * 120));
     h += fbm(x * 0.01, z * 0.01, 4) * 10 * Math.min(1, h / 10);
-    if (along > 0 && ad < 24) h = Math.min(h, deck - 2.5);
+    // o: distance outside the nearest portal (negative = inside the tunnel).
+    const o = along > 0 ? along : -Math.min(q.s - TUNNEL.s0, TUNNEL.s1 - q.s);
+    const e = Math.max(0, Math.abs(q.d - pc) - phw);
+    if (o > -PORTAL.cut) {
+      // Cutting in front of each portal; outside the wing walls the ground rises from the wall top.
+      const wall = o <= 0 ? PORTAL.top : o < PORTAL.wing ? 1 + (PORTAL.top - 1) * Math.pow(1 - o / PORTAL.wing, 1.4) : 0;
+      h = Math.min(h, e > 0 ? deck + wall - 0.3 + e * 0.7 : deck - 2.5);
+      cutV[i] = e > 0 ? 0 : 1;
+    } else if (e === 0) {
+      h = Math.max(h, deck + 9.5);   // never dips into the tunnel bores
+    }
+    nearV[i] = o > -PORTAL.cut - 4 && o < PORTAL.wing + 10 && e < 12 ? 1 : 0;
     pos.setY(i, Math.max(-1, h - 0.5));
   }
+  // Drop triangles that would span the cutting edge near a portal (they would slope across a
+  // tunnel mouth or through a bore); the headwall box and wing walls close those gaps.
+  const idx = geo.index.array, keep = [];
+  for (let t = 0; t < idx.length; t += 3) {
+    const a = idx[t], b = idx[t + 1], c2 = idx[t + 2];
+    const mixed = cutV[a] !== cutV[b] || cutV[a] !== cutV[c2];
+    if (mixed && (nearV[a] || nearV[b] || nearV[c2])) continue;
+    keep.push(a, b, c2);
+  }
+  geo.setIndex(keep);
   geo.computeVertexNormals();
   const mat = new THREE.MeshStandardMaterial({ color: 0x0b140d, roughness: 1, metalness: 0 });
   const m = new THREE.Mesh(geo, mat);

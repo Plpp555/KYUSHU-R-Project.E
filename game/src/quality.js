@@ -3,22 +3,22 @@ export const PRESETS = {
   ULTRA: {
     label: 'ULTRA', targetHeight: 1080, maxPixelRatio: 3, ao: true, aoHalf: false, aoQuality: 'High',
     msaa: 4, smaa: true, bloom: 1.15, bloomLevels: 9, roadReflection: 0.6, waterReflection: 0.45,
-    envSize: 256, envEvery: 1, envFaces: 3, buildingDensity: 1.0, traffic: 20, oncoming: 16, lensBlur: 1,
+    envSize: 256, envEvery: 1, envFaces: 3, buildingDensity: 1.0, traffic: 14, oncoming: 16, lensBlur: 1,
   },
   HIGH: {
     label: 'HIGH', targetHeight: 900, maxPixelRatio: 2.5, ao: true, aoHalf: true, aoQuality: 'Medium',
     msaa: 4, smaa: true, bloom: 1.1, bloomLevels: 8, roadReflection: 0.5, waterReflection: 0.35,
-    envSize: 192, envEvery: 1, envFaces: 2, buildingDensity: 0.85, traffic: 18, oncoming: 12, lensBlur: 1,
+    envSize: 192, envEvery: 1, envFaces: 2, buildingDensity: 0.85, traffic: 13, oncoming: 12, lensBlur: 1,
   },
   MEDIUM: {
     label: 'MEDIUM', targetHeight: 720, maxPixelRatio: 2, ao: false, aoHalf: true, aoQuality: 'Low',
     msaa: 4, smaa: false, bloom: 1.0, bloomLevels: 7, roadReflection: 0.4, waterReflection: 0,
-    envSize: 128, envEvery: 1, envFaces: 1, buildingDensity: 0.7, traffic: 16, oncoming: 8, lensBlur: 1,
+    envSize: 128, envEvery: 1, envFaces: 1, buildingDensity: 0.7, traffic: 12, oncoming: 8, lensBlur: 1,
   },
   LOW: {
     label: 'LOW', targetHeight: 540, maxPixelRatio: 1.5, ao: false, aoHalf: true, aoQuality: 'Performance',
     msaa: 0, smaa: true, bloom: 0.9, bloomLevels: 6, roadReflection: 0, waterReflection: 0,
-    envSize: 64, envEvery: 0, envFaces: 0, buildingDensity: 0.5, traffic: 14, oncoming: 6, lensBlur: 0,
+    envSize: 64, envEvery: 0, envFaces: 0, buildingDensity: 0.5, traffic: 10, oncoming: 6, lensBlur: 0,
   },
 };
 

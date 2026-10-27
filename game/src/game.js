@@ -2,7 +2,7 @@
 // finish → result / continue), race rules, collisions, dynamic car lights, camera, HUD, audio.
 import * as THREE from 'three';
 import { CarVisual } from './cars.js';
-import { Vehicle, SPECS } from './physics.js';
+import { Vehicle, SPECS, ASSISTS } from './physics.js';
 import { Rival } from './rival.js';
 import { Traffic, collide } from './traffic.js';
 import { Autopilot } from './autopilot.js';
@@ -15,6 +15,8 @@ import { clamp, lerp, wrapAngle, setLayers, LAYER } from './util.js';
 import { PRESETS, QUALITY_ORDER } from './quality.js';
 
 const HEAD_COL = new THREE.Color(1, 0.95, 0.86);
+// Tyre grip of the road surface per weather setting.
+const ROAD_GRIP = { WET: 0.86, RAIN: 0.8, DAMP: 0.93, DRY: 1.0 };
 const BREAKAWAY = 500;
 
 export class Game {
@@ -71,6 +73,7 @@ export class Game {
     this.hud.visible = false;
     this.input.showTouch(false);
     this.player.reset(420, 0, 180 / 3.6);
+    this.player.assist = ASSISTS.FULL;
     this.autopilot.targetD = 0;
     this.rivalVis.root.visible = false;
     this.traffic.reset(420);
@@ -100,26 +103,33 @@ export class Game {
     const items = [
       { label: 'QUALITY', jp: '画質', value: s.quality, action: (dir) => { s.quality = cycle(QUALITY_ORDER, s.quality, dir); this.ui.setValue(0, s.quality + (s.quality !== this.quality.label ? ' *' : '')); save(); } },
       { label: 'STEERING', jp: '操作', value: s.steering, action: (dir) => { s.steering = cycle(['TOUCH', 'TILT'], s.steering, dir); this.input.mode = s.steering.toLowerCase(); this.ui.setValue(1, s.steering); save(); } },
-      { label: 'AUTO ACCEL', jp: 'オートアクセル', value: s.autoAccel ? 'ON' : 'OFF', action: () => { s.autoAccel = !s.autoAccel; this.input.autoAccel = s.autoAccel; this.ui.setValue(2, s.autoAccel ? 'ON' : 'OFF'); save(); } },
-      { label: 'CAMERA', jp: '視点', value: s.camera, action: (dir) => { s.camera = cycle(['CHASE', 'NEAR', 'BUMPER'], s.camera, dir); this.rig.setMode(s.camera); this.ui.setValue(3, s.camera); save(); } },
-      { label: 'WEATHER', jp: '天候・路面', value: s.road, action: (dir) => { s.road = cycle(['WET', 'RAIN', 'DAMP', 'DRY'], s.road, dir); this.applyRoad(); this.ui.setValue(4, s.road); save(); } },
-      { label: 'BGM', jp: '音楽', value: s.bgm ? 'ON' : 'OFF', action: () => { s.bgm = !s.bgm; this.audio.setMusic(s.bgm); this.ui.setValue(5, s.bgm ? 'ON' : 'OFF'); save(); } },
-      { label: 'DYNAMIC RES', jp: '解像度自動調整', value: s.dynamicRes ? 'ON' : 'OFF', action: () => { s.dynamicRes = !s.dynamicRes; this.ui.setValue(6, s.dynamicRes ? 'ON' : 'OFF'); save(); } },
+      { label: 'ASSIST', jp: '運転支援 TCS/ESC', value: s.assist, action: (dir) => { s.assist = cycle(['FULL', 'SPORT', 'OFF'], s.assist, dir); if (this.pausedSettings) this.applyAssist(); this.ui.setValue(2, s.assist); save(); } },
+      { label: 'AUTO ACCEL', jp: 'オートアクセル', value: s.autoAccel ? 'ON' : 'OFF', action: () => { s.autoAccel = !s.autoAccel; this.input.autoAccel = s.autoAccel; this.ui.setValue(3, s.autoAccel ? 'ON' : 'OFF'); save(); } },
+      { label: 'CAMERA', jp: '視点', value: s.camera, action: (dir) => { s.camera = cycle(['CHASE', 'NEAR', 'BUMPER'], s.camera, dir); this.rig.setMode(s.camera); this.ui.setValue(4, s.camera); save(); } },
+      { label: 'WEATHER', jp: '天候・路面', value: s.road, action: (dir) => { s.road = cycle(['WET', 'RAIN', 'DAMP', 'DRY'], s.road, dir); this.applyRoad(); this.ui.setValue(5, s.road); save(); } },
+      { label: 'BGM', jp: '音楽', value: s.bgm ? 'ON' : 'OFF', action: () => { s.bgm = !s.bgm; this.audio.setMusic(s.bgm); this.ui.setValue(6, s.bgm ? 'ON' : 'OFF'); save(); } },
+      { label: 'DYNAMIC RES', jp: '解像度自動調整', value: s.dynamicRes ? 'ON' : 'OFF', action: () => { s.dynamicRes = !s.dynamicRes; this.ui.setValue(7, s.dynamicRes ? 'ON' : 'OFF'); save(); } },
       { label: 'APPLY & BACK', jp: '戻る', action: () => { save(); if (s.quality !== this.quality.label) location.reload(); else { this.state = prev; this.pausedSettings = false; back(); } } },
     ];
-    this.ui.menu('SETTINGS', items, { onBack: () => items[7].action(), hint: '←→ CHANGE   * = RESTART' });
+    this.ui.menu('SETTINGS', items, { onBack: () => items[items.length - 1].action(), hint: '←→ CHANGE   * = RESTART' });
   }
 
-  applyRoad() { this.world.setWeather(this.settings.road); }
+  applyRoad() {
+    this.world.setWeather(this.settings.road);
+    this.player.gripScale = this.rival.gripScale = ROAD_GRIP[this.settings.road] ?? 1;
+  }
+
+  applyAssist() { this.player.assist = this.autodrive ? ASSISTS.FULL : ASSISTS[this.settings.assist] || ASSISTS.SPORT; }
 
   startRace(mode) {
     this.mode = mode;
     const p = this.player;
     p.reset(START_S, mode === 'battle' ? 1.75 : 0, 0);
+    this.applyAssist();
     this.rivalVis.root.visible = mode === 'battle';
     this.rival.reset(START_S, -1.75);
     this.rival.targetD = -3.5;
-    this.rival.difficulty = 1;
+    this.rival.difficulty = 0.9;
     this.autopilot.targetD = mode === 'battle' ? 3.5 : 0;
     this.traffic.reset(START_S, START_S);
     for (const c of this.traffic.cars) if (c.s < START_S + 160) this.traffic.spawnSafe(c, START_S + 160 + Math.random() * 500);
@@ -209,7 +219,7 @@ export class Game {
     this.collideTraffic(true);
     this.syncPlayerVisual(dt);
     this.rig.cinematic(dt, this.carTarget(), { shotLen: 5.5 });
-    this.audio.update({ active: 1, rpm: p.rpm, throttle: p.throttle * 0.6, boost: p.boost, speed: p.v, slip: p.slip, wall: p.wallContact, rival: null });
+    this.audio.update({ active: 1, rpm: p.rpm, throttle: p.throttle * 0.6, boost: p.boost, speed: p.v, slip: p.tireSlip, wall: p.wallContact, rival: null });
     this.lens(p.v * 0.6);
   }
 
@@ -256,7 +266,7 @@ export class Game {
 
   updateRace(dt, inp) {
     const p = this.player;
-    if (this.autodrive) { inp = this.autopilot.inputs(p, dt); this.autopilot.cruise = 330 / 3.6; }
+    if (this.autodrive) { this.autopilot.others = this.mode === 'battle' ? [this.rival] : []; inp = this.autopilot.inputs(p, dt); this.autopilot.cruise = 330 / 3.6; }
     this.elapsed += dt;
     if (this.mode !== 'free') this.timeLeft -= dt;
     p.step(dt, inp);
@@ -269,13 +279,14 @@ export class Game {
     this.syncPlayerVisual(dt);
     this.rig.follow(dt, this.carTarget());
     this.raceLogic();
-    this.audio.update({ active: 1, rpm: p.rpm, throttle: p.throttle, boost: p.boost, speed: p.v, slip: p.slip, wall: p.wallContact, rival: this.mode === 'battle' ? this.rivalAudio() : null });
+    this.audio.update({ active: 1, rpm: p.rpm, throttle: p.throttle, boost: p.boost, speed: p.v, slip: p.tireSlip, wall: p.wallContact, rival: this.mode === 'battle' ? this.rivalAudio() : null });
     this.lens(p.v);
   }
 
   updateIdleRace(dt) {
     // After the finish: car coasts on autopilot.
     const p = this.player;
+    p.assist = ASSISTS.FULL;
     const a = this.autopilot.inputs(p, dt);
     a.throttle *= 0.35;
     p.step(dt, a);
@@ -409,7 +420,7 @@ export class Game {
         c.s += hit.sgn * hit.depth * hit.wb;
         if (hit.vrel < 0) {
           const j = -(1.25) * hit.vrel;
-          p.applyImpulse(-hit.sgn * j * hit.wa, 0);
+          p.applyImpulse(-hit.sgn * j * hit.wa, 0, hit.sgn * (c.d - p.d) * j * hit.wa * 0.05);
           c.v = Math.max(0, c.v + hit.sgn * j * hit.wb); c.bumped = 2.5;
           c.yawVel += (Math.random() - 0.5) * 2.5;
           this.impact(Math.abs(hit.vrel), c.d - p.d);
@@ -419,7 +430,7 @@ export class Game {
         c.d += hit.sgn * hit.depth * hit.wb;
         if (hit.vrel < 0) {
           const j = -(1.4) * hit.vrel;
-          p.applyImpulse(-Math.abs(hit.vrel) * 0.12 * p.v / 30, -hit.sgn * j * hit.wa);
+          p.applyImpulse(-Math.abs(hit.vrel) * 0.12 * p.v / 30, -hit.sgn * j * hit.wa, -hit.sgn * j * hit.wa * clamp((c.s - p.s) / 2, -1, 1) * 0.06);
           c.yawVel += hit.sgn * j * 0.25;
           this.impact(Math.abs(hit.vrel) * 0.7, c.d - p.d);
         }
@@ -467,7 +478,7 @@ export class Game {
       r.s += hit.sgn * hit.depth * hit.wb;
       if (hit.vrel < 0) {
         const j = -1.2 * hit.vrel;
-        p.applyImpulse(-hit.sgn * j * hit.wa, 0);
+        p.applyImpulse(-hit.sgn * j * hit.wa, 0, hit.sgn * (r.d - p.d) * j * hit.wa * 0.05);
         r.v = Math.max(0, r.v + hit.sgn * j * hit.wb);
         r.bump((Math.random() - 0.5) * 0.8);
         this.impact(Math.abs(hit.vrel), r.d - p.d);
@@ -477,7 +488,7 @@ export class Game {
       r.d += hit.sgn * hit.depth * hit.wb;
       if (hit.vrel < 0) {
         const j = -1.3 * hit.vrel;
-        p.applyImpulse(0, -hit.sgn * j * hit.wa);
+        p.applyImpulse(0, -hit.sgn * j * hit.wa, -hit.sgn * j * hit.wa * clamp((r.s - p.s) / 2, -1, 1) * 0.06);
         r.vD += hit.sgn * j * hit.wb;
         r.bump(hit.sgn * 0.5);
         this.impact(Math.abs(hit.vrel) * 0.8, r.d - p.d);
@@ -506,6 +517,7 @@ export class Game {
         this.input.haptic(Math.min(100, 15 + e.impact * 6));
         if (e.impact > 6) this.crashes++;
       }
+      if (e.type === 'recover') this.hud.message('RECOVERY', { color: '#ffd21a', dur: 1.2, size: 0.55 });
     }
     p.events.length = 0;
     for (const e of this.rival.events) if (e.type === 'shift' && this.rival.v > 20) this.exhaustFlame(this.rivalVis, true);
@@ -542,9 +554,7 @@ export class Game {
     v.body.rotation.x = p.bodyPitch;
     v.body.position.y = Math.abs(p.bodyRoll) * 0.2;
     v.root.updateMatrixWorld(true);
-    const kmh = p.v * 3.6;
-    const steerAngle = p.steer * lerp(0.5, 0.055, clamp(kmh / 300, 0, 1) ** 0.7);
-    v.update(dt, p.v, steerAngle);
+    v.update(dt, p.v, p.delta);
     v.setBrake(Math.max(p.brake, this.state === 'countdown' ? 1 : 0));
     v.faceCamera(this.camera);
     this.rivalVis.faceCamera(this.camera);
@@ -640,13 +650,14 @@ export class Game {
       timeLeft: this.mode === 'free' ? 0 : this.timeLeft ?? TIME_START, elapsed: this.elapsed || 0,
       s: p.s, rivalS: battle ? this.rival.s : null, mode: this.mode, zoneName: zone ? zone.name : '',
       rivalBehind, rivalSide,
+      tcs: p.tcsOn > 0.3, esc: p.escOn > 0.3, assist: this.settings.assist,
     };
   }
 }
 
 export function defaultSettings() {
   const saved = JSON.parse(localStorage.getItem('kr_settings') || '{}');
-  return Object.assign({ quality: 'ULTRA', steering: 'TOUCH', autoAccel: false, camera: 'CHASE', road: 'WET', bgm: true, dynamicRes: true }, saved);
+  return Object.assign({ quality: 'ULTRA', steering: 'TOUCH', autoAccel: false, camera: 'CHASE', road: 'WET', bgm: true, dynamicRes: true, assist: 'SPORT' }, saved);
 }
 
 export { PRESETS, LANES, setLayers, LAYER };

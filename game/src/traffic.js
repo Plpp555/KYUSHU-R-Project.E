@@ -9,7 +9,7 @@ import { TrafficRenderer } from './npcbatch.js';
 import { mulberry32, clamp } from './util.js';
 import { TUNNEL } from './course.js';
 
-class NPC {
+export class NPC {
   constructor(template, color, rng, oncoming) {
     this.template = template;
     this.meta = template.meta;
@@ -73,15 +73,22 @@ export class Traffic {
     });
   }
 
+  // Keep-left traffic (Japan): lane 0 = left (走行車線) is busiest and slowest, lane 2 = right
+  // (追越車線) carries fewer, faster cars.
+  pickLane() { const x = this.rng(); return x < 0.45 ? 0 : x < 0.8 ? 1 : 2; }
+  laneSpeed(lane) { const r = this.rng(); return [68 + r * 20, 78 + r * 22, 92 + r * 24][lane] / 3.6; }
+
   spawnSafe(c, s) {
-    const r = this.rng;
-    for (let k = 0; k < 6; k++) {
-      const lane = Math.floor(r() * 3);
-      const ok = this.cars.every(o => o === c || !o.active || o.lane !== lane || Math.abs(o.s - s) > 26);
-      if (ok) { c.spawn(s, lane, (62 + r() * 48) / 3.6); return; }
-      s += 20;
+    for (let k = 0; k < 8; k++) {
+      const lane = this.pickLane();
+      const ok = this.cars.every(o => o === c || !o.active || o.lane !== lane || Math.abs(o.s - s) > 30);
+      // Never three abreast: always leave a lane open to get through.
+      const others = new Set();
+      for (const o of this.cars) if (o !== c && o.active && o.lane !== lane && Math.abs(o.s - s) < 45) others.add(o.lane);
+      if (ok && others.size < 2) { c.spawn(s, lane, this.laneSpeed(lane)); return; }
+      s += 24;
     }
-    c.spawn(s, Math.floor(r() * 3), 70 / 3.6);
+    c.spawn(s, 0, this.laneSpeed(0));
   }
 
   /** Nearest car ahead in a lane (by lateral overlap) from position s,d. */
@@ -116,7 +123,9 @@ export class Traffic {
       c.laneTimer -= dt;
       if (c.laneTimer < 0 && c.targetLane === c.lane) {
         c.laneTimer = 6 + this.rng() * 12;
-        const nl = clamp(c.lane + (this.rng() < 0.5 ? -1 : 1), 0, 2);
+        // Overtake a slower car on the right, otherwise drift back towards the left lane.
+        const blocked = lead && lead.gap < 60 && lead.car.v < c.cruise - 1;
+        const nl = clamp(c.lane + (blocked ? 1 : this.rng() < 0.65 ? -1 : 1), 0, 2);
         const free = this.cars.every(o => o === c || !o.active || Math.abs(o.d - LANES[nl]) > 2 || Math.abs(o.s - c.s) > 22)
           // Don't cut in front of a fast car coming from behind (player / rival).
           && racers.every(r => { const ds = c.s - r.s; return ds < -10 || ds > 30 + Math.max(0, r.v - c.v) * 3.5 || Math.abs(r.d - LANES[nl]) > 2.6; });

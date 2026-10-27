@@ -155,6 +155,20 @@ export class HUD {
       g.font = `900 ${br * 0.36}px ${NUM}`; g.fillStyle = '#fff';
       g.fillText(st.boostBar.toFixed(1), bx, by + br * 0.06);
     }
+    // Driving-aid warning lamps (flash while intervening, steady amber when switched off).
+    const lx = cx - R * 1.32, ly = cy - R * 0.2, lw = R * 0.34, lh = R * 0.15;
+    const blink = (performance.now() % 240) < 140;
+    const lamps = st.assist === 'OFF' ? [['ESC OFF', true]] : [['TCS', st.tcs && blink], ['ESC', st.esc && blink]];
+    lamps.forEach(([label, on], i) => {
+      const y = ly + i * lh * 1.3;
+      const w = label.length > 3 ? lw * 1.5 : lw;
+      g.fillStyle = on ? 'rgba(255,170,20,0.92)' : 'rgba(6,8,14,0.6)';
+      g.strokeStyle = on ? '#ffd27a' : 'rgba(255,190,90,0.25)'; g.lineWidth = 1.5;
+      g.beginPath(); g.roundRect(lx - w / 2, y - lh / 2, w, lh, lh * 0.3); g.fill(); g.stroke();
+      g.font = `900 ${lh * 0.62}px ${NUM}`; g.fillStyle = on ? '#1a0e00' : 'rgba(255,200,120,0.35)';
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(label, lx, y + lh * 0.04);
+    });
   }
 
   timePanel(st, W, H, u) {

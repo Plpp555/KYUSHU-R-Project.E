@@ -4,9 +4,9 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { makeFrame, HALF_W, MEDIAN_D, ONCOMING_D } from './track.js';
 import { LAMP } from './lighting.js';
-import { TUNNEL, BRIDGE, ZONES } from './course.js';
+import { TUNNEL, BRIDGE, ZONES, PORTAL } from './course.js';
 import { makeRoadMaterial, makeSurfaceMaterial } from './trackmaterials.js';
-import { LAYER, setLayers, mulberry32 } from './util.js';
+import { LAYER, setLayers, mulberry32, canvasTexture } from './util.js';
 
 const CHUNK = 1000;
 const LEFT_EDGE = HALF_W;                 // 6.25
@@ -165,6 +165,9 @@ export function buildTrack(track) {
   addMeshes(group, chunked(track, SOUNDWALL_L, 0, L, s => soundWallAt(s) && notTunnel(s)), sw, ALL);
   addMeshes(group, chunked(track, SOUNDWALL_R, 0, L, s => soundWallAt(s) && notTunnel(s)), sw, ALL);
   addMeshes(group, chunked(track, tunnelProfile(), TUNNEL.s0, TUNNEL.s1, null), makeSurfaceMaterial(1), ALL);
+  // Second tube for the oncoming carriageway.
+  const onTube = tunnelProfile().map(([d, h]) => [d + ONCOMING_D, h]);
+  addMeshes(group, chunked(track, onTube, TUNNEL.s0, TUNNEL.s1, null), makeSurfaceMaterial(1), ALL);
 
   const f = makeFrame();
   const rng = mulberry32(1234);
@@ -200,6 +203,14 @@ export function buildTrack(track) {
   const tl = [];
   for (let s = Math.ceil(TUNNEL.s0 / 6) * 6; s < TUNNEL.s1; s += 6) {
     tl.push(frameMatrix(track, s, 4.6, 5.3, f), frameMatrix(track, s, -4.6, 5.3, f));
+    tl.push(frameMatrix(track, s, ONCOMING_D + 4.6, 5.3, f), frameMatrix(track, s, ONCOMING_D - 4.6, 5.3, f));
+  }
+  // Entrance (threshold) lighting: extra fixtures in between and two centre rows.
+  for (let s = Math.ceil(TUNNEL.s0 / 6) * 6 + 3; s < TUNNEL.s0 + 100; s += 6) {
+    tl.push(frameMatrix(track, s, 4.6, 5.3, f), frameMatrix(track, s, -4.6, 5.3, f));
+  }
+  for (let s = TUNNEL.s0 + 2; s < TUNNEL.s0 + 64; s += 3) {
+    tl.push(frameMatrix(track, s, 1.9, 6.75, f), frameMatrix(track, s, -1.9, 6.75, f));
   }
   const tLampMat = new THREE.MeshBasicMaterial({ color: LAMP.tunnelColor.clone().multiplyScalar(14) });
   group.add(instanced(new THREE.BoxGeometry(0.28, 0.1, 1.4), tLampMat, tl, ALL));
@@ -303,28 +314,129 @@ function buildLightCones(track, lampS) {
   return instanced(geo, mat, mats, [LAYER.MAIN]);
 }
 
-function buildPortal(track, s, exit) {
+// --- Tunnel portal --------------------------------------------------------------
+// Headwall spanning both tubes with a cut-and-cover box behind it, coping, wing walls
+// retaining the hillside cutting, flood masts and the tunnel name plate.
+const TUBE_C = [0, ONCOMING_D];
+
+/** Maps a geometry built in portal space (x = sgn*d, y = h, z = depth into the tunnel) onto the track. */
+function trackify(track, geo, s, sgn) {
   const f = makeFrame();
-  track.frame(s, f);
+  const p = geo.attributes.position, n = p.count;
+  const trk = new Float32Array(n * 3), aF = new Float32Array(n * 3), aL = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const d = sgn * p.getX(i), h = p.getY(i), sv = s + sgn * p.getZ(i);
+    track.frame(sv, f);
+    p.setXYZ(i, f.pos.x + f.left.x * d + f.up.x * h, f.pos.y + f.left.y * d + f.up.y * h, f.pos.z + f.left.z * d + f.up.z * h);
+    trk.set([sv, d, h], i * 3); aF.set([f.fwd.x, f.fwd.y, f.fwd.z], i * 3); aL.set([f.left.x, f.left.y, f.left.z], i * 3);
+  }
+  geo.deleteAttribute('uv');
+  geo.deleteAttribute('normal');
+  geo.setAttribute('aTrack', new THREE.BufferAttribute(trk, 3));
+  geo.setAttribute('aF', new THREE.BufferAttribute(aF, 3));
+  geo.setAttribute('aL', new THREE.BufferAttribute(aL, 3));
+  geo.computeVertexNormals();
+  geo.computeBoundingSphere();
+  return geo;
+}
+
+function tunnelPlate(sub) {
+  return canvasTexture(1024, 192, (g, w, h) => {
+    const gr = g.createLinearGradient(0, 0, 0, h);
+    gr.addColorStop(0, '#2b2d31'); gr.addColorStop(1, '#17181b');
+    g.fillStyle = gr; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#b9b4a6'; g.lineWidth = 6; g.strokeRect(10, 10, w - 20, h - 20);
+    g.fillStyle = '#f2efe6'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '104px "Dela Gothic One", "Noto Sans JP", sans-serif';
+    g.fillText('西公園トンネル', w / 2, 82, w - 80);
+    g.font = '34px "Russo One", sans-serif';
+    g.fillText(sub, w / 2, 156, w - 80);
+  });
+}
+
+function buildPortal(track, s, exit) {
+  const group = new THREE.Group();
+  const sgn = exit ? -1 : 1;
+  const xa = sgn * PORTAL.dL, xb = sgn * PORTAL.dR;
+  const x0 = Math.min(xa, xb), x1 = Math.max(xa, xb);
+  const mat = makeSurfaceMaterial(5);
+  const ALL = [LAYER.MAIN, LAYER.ENV, LAYER.REFLECT];
+  // Headwall + box: two arched openings slightly larger than the tube lining.
   const shape = new THREE.Shape();
-  shape.moveTo(-26, -3); shape.lineTo(26, -3); shape.lineTo(26, 13); shape.lineTo(-26, 13); shape.lineTo(-26, -3);
-  const hole = new THREE.Path();
-  hole.moveTo(-6.95, 0);
-  for (let i = 0; i <= 24; i++) { const t = (i / 24) * Math.PI; hole.lineTo(-6.95 * Math.cos(t), 3.2 + 4 * Math.sin(t)); }
-  hole.lineTo(6.95, 0); hole.lineTo(-6.95, 0);
-  shape.holes.push(hole);
-  const g = new THREE.ExtrudeGeometry(shape, { depth: 1.2, bevelEnabled: false });
-  g.translate(0, 0, exit ? 0 : -1.2);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x77736c, roughness: 0.9 });
-  const m = new THREE.Mesh(g, mat);
-  const left = f.left.clone(), up = new THREE.Vector3(0, 1, 0), fwd = new THREE.Vector3().crossVectors(left, up);
-  // Shape x axis = -left so that +x is to the right when looking forward.
-  m.matrix.makeBasis(left.clone().negate(), up, fwd.negate()).setPosition(f.pos);
-  m.matrixAutoUpdate = false;
-  m.matrixWorldNeedsUpdate = true;
-  setLayers(m, LAYER.MAIN, LAYER.ENV, LAYER.REFLECT);
-  // Name plate above the portal
-  return m;
+  shape.moveTo(x0, -2.6); shape.lineTo(x1, -2.6); shape.lineTo(x1, PORTAL.top); shape.lineTo(x0, PORTAL.top); shape.closePath();
+  for (const c of TUBE_C) {
+    const cx = sgn * c, w = 7.03;
+    const hole = new THREE.Path();
+    hole.moveTo(cx - w, -0.3); hole.lineTo(cx + w, -0.3);
+    for (let i = 0; i <= 24; i++) { const t = (i / 24) * Math.PI; hole.lineTo(cx + w * Math.cos(t), 3.2 + 4.06 * Math.sin(t)); }
+    hole.closePath();
+    shape.holes.push(hole);
+  }
+  const wall = trackify(track, new THREE.ExtrudeGeometry(shape, { depth: PORTAL.depth, bevelEnabled: false, curveSegments: 1 }), s, sgn);
+  // Coping overhanging the face.
+  const cap = new THREE.Shape();
+  cap.moveTo(x0 - 0.4, PORTAL.top - 0.2); cap.lineTo(x1 + 0.4, PORTAL.top - 0.2); cap.lineTo(x1 + 0.4, PORTAL.top + 0.7); cap.lineTo(x0 - 0.4, PORTAL.top + 0.7); cap.closePath();
+  const capG = new THREE.ExtrudeGeometry(cap, { depth: 2.0, bevelEnabled: false });
+  capG.translate(0, 0, -0.7);
+  const parts = [wall, trackify(track, capG, s, sgn)];
+  // Wing walls (height falls away from the portal); faces point into the cutting.
+  const wingTop = o => 1 + (PORTAL.top - 1) * Math.pow(Math.max(0, 1 - o / PORTAL.wing), 1.4);
+  for (const [d, inward] of [[PORTAL.dL, -1], [PORTAL.dR, 1]]) {
+    const prof = inward < 0 ? [[d + 0.5, 1], [d, 1], [d, -2.6]] : [[d, -2.6], [d, 1], [d - 0.5, 1]];
+    const sA = exit ? s : s - PORTAL.wing, sB = exit ? s + PORTAL.wing : s;
+    const g = extrude(track, prof, sA, sB, 2);
+    const p = g.attributes.position, tr = g.attributes.aTrack;
+    for (let i = 0; i < p.count; i++) {
+      if (tr.getZ(i) < 0.5) continue;
+      const top = wingTop(Math.abs(tr.getX(i) - s));
+      p.setY(i, p.getY(i) + top - 1);
+      tr.setZ(i, top);
+    }
+    g.deleteAttribute('normal');
+    g.computeVertexNormals();
+    g.computeBoundingSphere();
+    parts.push(g);
+  }
+  for (const g of parts) {
+    const m = new THREE.Mesh(g, mat);
+    m.matrixAutoUpdate = false;
+    setLayers(m, ...ALL);
+    group.add(m);
+  }
+  // Name plates above the opening a driver enters (ours at the entrance, the oncoming one at the exit).
+  const f = makeFrame();
+  const plateMat = new THREE.MeshBasicMaterial({ map: tunnelPlate(exit ? 'NISHI-KOEN TUNNEL' : 'NISHI-KOEN TUNNEL   L = 640 m'), color: new THREE.Color(0.62, 0.6, 0.56) });
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(9.5, 1.78), plateMat);
+  const plateD = exit ? ONCOMING_D : 0;
+  track.frame(s - sgn * 0.06, f);
+  const pl = f.pos.clone().addScaledVector(f.left, plateD).addScaledVector(f.up, 9.7);
+  const fw = new THREE.Vector3(f.fwd.x, 0, f.fwd.z).normalize().multiplyScalar(-sgn);
+  const lf = new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), fw);
+  plate.matrix.makeBasis(lf, new THREE.Vector3(0, 1, 0), fw).setPosition(pl);
+  plate.matrixAutoUpdate = false;
+  setLayers(plate, ...ALL);
+  group.add(plate);
+  // Flood masts (lighting is analytic, see trackLamps()).
+  const ms = s - sgn * LAMP.mast.back;
+  const metal = new THREE.MeshStandardMaterial({ color: 0x55595e, roughness: 0.5, metalness: 0.7 });
+  const lumMat = new THREE.MeshBasicMaterial({ color: LAMP.mast.color.clone().multiplyScalar(30) });
+  for (const d of LAMP.mast.rows) {
+    track.frame(ms, f);
+    const base = f.pos.clone().addScaledVector(f.left, d);
+    const H = LAMP.mast.height + 2.6;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.26, H, 10).translate(0, H / 2 - 2.6, 0), metal);
+    pole.position.copy(base);
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.42, 0.55), new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.5, metalness: 0.6 }));
+    const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.4), lumMat);
+    const aim = new THREE.Group();
+    aim.position.copy(base).addScaledVector(f.up, LAMP.mast.height);
+    aim.lookAt(track.point(s + sgn * 2, (PORTAL.dL + PORTAL.dR) / 2, 4));
+    head.position.z = 0; lens.position.z = 0.28;
+    aim.add(head, lens);
+    for (const o of [pole, head, lens]) setLayers(o, ...ALL);
+    group.add(pole, aim);
+  }
+  return group;
 }
 
 function buildBridge(track) {

@@ -14,6 +14,7 @@ export class Rival {
     this.difficulty = difficulty;
     this.halfL = 2.35; this.halfW = 0.98; this.mass = 1600;
     this.top = 338 / 3.6;
+    this.gripScale = 1;
     this.events = [];
     this.reset(0, 0);
   }
@@ -31,12 +32,17 @@ export class Rival {
     this.place(0);
   }
 
+  /** Fastest speed now that still makes every corner ahead (braking-point planner, same tyre
+   *  limits as the player's car on this surface). */
   maxCornerSpeed(s, v) {
-    const look = 40 + v * 2.2;
-    let k = 0;
-    for (let x = s; x < s + look; x += 8) k = Math.max(k, Math.abs(this.track.curvature(x)));
-    const aLat = 12.4 + this.difficulty * 0.8;
-    return k > 1e-5 ? Math.sqrt(aLat / k) : 999;
+    const g = this.gripScale;
+    const aLat = (8.3 + this.difficulty * 0.5) * g, aBrk = 8.4 * g;
+    let vT = 999;
+    for (let x = 0; x < 40 + v * 3.2; x += 8) {
+      const k = Math.abs(this.track.curvature(s + x));
+      if (k > 1e-5) vT = Math.min(vT, Math.sqrt(aLat / k + 2 * aBrk * x));
+    }
+    return vT;
   }
 
   update(dt, player, traffic, racing) {
@@ -78,18 +84,24 @@ export class Rival {
     // Rubber band.
     const gap = this.s - player.s;
     // gap > 0: rival ahead -> ease off; gap < 0: player ahead -> push harder.
-    if (gap > 60) vT *= clamp(1 - (gap - 60) * 0.0018 / this.difficulty, 0.45, 1);
+    if (gap > 40) vT *= clamp(1 - (gap - 40) * 0.0024 / this.difficulty, 0.42, 1);
     if (gap < -30) vT *= 1 + clamp((-gap - 30) / 700, 0, 0.08) * this.difficulty;
-    const blocked = freeAhead(this.d);
-    if (blocked < 25 + this.v * 0.7) {
-      const lead = traffic.leader(this.s, this.d, this.halfW, null);
-      if (lead) vT = Math.min(vT, lead.car.v + blocked * 0.15);
+    // Car ahead in our path: carry only the speed we could still brake off behind it.
+    let lg = 260, lv = 0;
+    for (const c of traffic.cars) {
+      if (!c.active) continue;
+      const ds = c.s - this.s;
+      if (ds < 0 || ds > 260 || Math.abs(c.d - this.d) > c.halfW + this.halfW + 0.35) continue;
+      const g = ds - c.halfL - this.halfL;
+      if (g < lg) { lg = g; lv = c.v; }
     }
+    if (lg < 260) vT = Math.min(vT, Math.sqrt(lv * lv + 2 * 8.5 * this.gripScale * Math.max(0, lg - 8)));
     if (!racing) vT = 0;
-    const accMax = (8.6 + this.difficulty * 0.8) * (1 - Math.pow(this.v / (this.top * 1.02), 2.2)) + 0.3;
+    // 4WD: traction-limited off the line, then power/drag limited.
+    const accMax = Math.min(9.6 * this.gripScale, (7.6 + this.difficulty * 0.6) * (1 - Math.pow(this.v / (this.top * 1.02), 2.0)) + 0.3);
     const prevV = this.v;
     if (vT > this.v) { this.v = Math.min(vT, this.v + accMax * dt); this.brake = 0; this.throttle = 1; }
-    else { this.v = Math.max(vT, this.v - 11.5 * dt); this.brake = this.v < prevV - 0.02 ? 1 : 0; this.throttle = 0.2; }
+    else { this.v = Math.max(vT, this.v - 10.5 * this.gripScale * dt); this.brake = this.v < prevV - 0.02 ? 1 : 0; this.throttle = 0.2; }
 
     // --- Lateral ---
     const lim = [WALL_RIGHT + this.halfW, WALL_LEFT - this.halfW];

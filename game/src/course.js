@@ -41,12 +41,16 @@ export const ZONES = [
 ];
 
 export const TUNNEL = { s0: 2560, s1: 3200 };
+// Portal headwalls span both tubes (track d from dR to dL); a cut-and-cover box of `depth` m sits
+// behind each headwall and wing walls retain the hillside cutting for `wing` m in front of it.
+// The hillside is cut away up to `cut` m inside each portal.
+export const PORTAL = { dL: 13, dR: -28, top: 12.5, depth: 22, wing: 40, cut: 14 };
 export const BRIDGE = { s0: 3420, s1: 4420, pylons: [3720, 4120], mainSpan: [3520, 4320] };
 
 // Checkpoints add time in TIME ATTACK / BATTLE (arcade time extension).
 export const CHECKPOINTS = [2500, 4600, 6450, 8400];
-export const TIME_START = 80;
-export const TIME_EXTEND = [34, 34, 34, 32];
+export const TIME_START = 86;
+export const TIME_EXTEND = [38, 36, 36, 34];
 
 // Overhead guide signs (green) and LED boards.
 export const SIGNS = [
